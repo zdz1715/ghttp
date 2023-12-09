@@ -1,22 +1,3 @@
-# ghttp
-golang http客户端
-
-因为有[gout](https://github.com/guonaihong/gout)这样优秀的http客户端，就不重复造轮子了，只是在[gout](https://github.com/guonaihong/gout)基础上封装了一层方法。
-此举是为了解决我写第三方sdk的时候可以统一处理参数和返回值，提高开发效率。
-
-## Contents
-- [Installation](#Installation)
-- [Quick start](#quick-start)
-## Installation
-```shell
-github.com/zdz1715/ghttp@latest
-```
-
-## Quick start
-### gitlab-demo
-> [!NOTE]
-> 只需按照下面初次定义好`gitlab`的`Invoke`方法，然后以后请求只需要设置不同的请求方法和url就好了
-```go
 package main
 
 import (
@@ -128,5 +109,3 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 
 	return nil
 }
-
-```
