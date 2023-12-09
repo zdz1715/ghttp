@@ -9,7 +9,7 @@ golang http客户端
 - [Quick start](#quick-start)
 ## Installation
 ```shell
-github.com/zdz1715/ghttp@latest
+go get -u github.com/zdz1715/ghttp@latest
 ```
 
 ## Quick start
