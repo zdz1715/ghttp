@@ -7,6 +7,7 @@ golang http客户端
 ## Contents
 - [Installation](#Installation)
 - [Quick start](#quick-start)
+- [Setting](#setting)
 ## Installation
 ```shell
 go get -u github.com/zdz1715/ghttp@latest
@@ -130,7 +131,8 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 }
 
 ```
-### 路径设置
+## setting
+### path
 > [!NOTE]
 > 设置的路径若是`http://`或`https://`开头，则不会拼接设置的`Endpoint`, 如下方应对钉钉新老接口的问题
 ```go
