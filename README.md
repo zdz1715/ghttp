@@ -15,7 +15,7 @@ go get -u github.com/zdz1715/ghttp@latest
 ## Quick start
 ### gitlab-demo
 > [!NOTE]
-> 只需按照下面初次定义好`gitlab`的`Invoke`方法，然后以后请求只需要设置不同的请求方法和url就好了
+> 只需按照下面初次定义好`gitlab`的`Invoke`方法，然后所有请求以后只需要设置不同的请求方法、url、参数、响应结构体就好了
 ```go
 package main
 
@@ -129,4 +129,19 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 	return nil
 }
 
+```
+### 路径设置
+> [!NOTE]
+> 设置的路径若是`http://`或`https://`开头，则不会拼接设置的`Endpoint`, 如下方应对钉钉新老接口的问题
+```go
+clientOps := []ghttp.ClientOption{
+    ghttp.WithEndpoint("https://api.dingtalk.com"),
+}
+// 钉钉老版接口
+// https://oapi.dingtalk.com/department/list
+client.Invoke(context.Background(), http.MethodGet, "https://oapi.dingtalk.com/department/list", args, reply)
+
+// 钉钉新版接口
+// https://api.dingtalk.com/department/list
+client.Invoke(context.Background(), http.MethodPost, "/v1.0/oauth2/accessToken", args, reply)
 ```
