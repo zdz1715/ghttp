@@ -8,6 +8,7 @@ golang http客户端
 - [Installation](#Installation)
 - [Quick start](#quick-start)
 - [Setting](#setting)
+- [SDK](#sdk)
 ## Installation
 ```shell
 go get -u github.com/zdz1715/ghttp@latest
@@ -154,3 +155,9 @@ client.Invoke(context.Background(), http.MethodGet, "https://oapi.dingtalk.com/d
 // https://api.dingtalk.com/department/list
 client.Invoke(context.Background(), http.MethodPost, "/v1.0/oauth2/accessToken", args, reply)
 ```
+
+## SDK
+- [go-jira](https://github.com/zdz1715/go-jira)
+- [go-gitlab](https://github.com/zdz1715/go-gitlab)
+- [go-gitee](https://github.com/zdz1715/go-gitee)
+- [go-dingtalk](https://github.com/zdz1715/go-dingtalk)
