@@ -58,6 +58,12 @@ func (e *gitlabError) String() string {
 	return ""
 }
 
+func (e *gitlabError) Reset() {
+	e.Message = nil
+	e.Error = ""
+	e.ErrorDescription = ""
+}
+
 func main() {
 	args := map[string]string{
 		"grant_type": "password",
@@ -129,6 +135,7 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 
 	return nil
 }
+
 
 ```
 ## setting
