@@ -111,6 +111,10 @@ func (c *Client) dataflow(ctx context.Context, method, endpoint, path string) *d
 func (c *Client) Invoke(ctx context.Context, method, path string, body, reply any, opts ...CallOption) (*http.Response, error) {
 	callOption := mustCallOption(opts...)
 
+	if c.opts.not2xxError != nil {
+		c.opts.not2xxError.Reset()
+	}
+
 	df := c.dataflow(ctx, method, c.Endpoint(), path)
 
 	df.RequestUse(middler.WithRequestMiddlerFunc(func(req *http.Request) error {
@@ -131,10 +135,8 @@ func (c *Client) Invoke(ctx context.Context, method, path string, body, reply an
 		return nil, err
 	}
 
-	if c.opts.not2xxError != nil {
-		if not2xxError := c.opts.not2xxError.String(); not2xxError != "" {
-			return nil, fmt.Errorf("method=%s code=%d message=%s", method, res.StatusCode, not2xxError)
-		}
+	if err := checkResponse(res, c.opts.not2xxError); err != nil {
+		return nil, err
 	}
 
 	return res, nil
@@ -196,7 +198,7 @@ func (c *Client) requestHandle(req *http.Request, option CallOption) error {
 
 func (c *Client) responseHandle(res *http.Response, option CallOption, df *dataflow.DataFlow, reply any) error {
 	alreadyBind := false
-	if Not2xxCode(res.StatusCode) && c.opts.not2xxError != nil {
+	if c.opts.not2xxError != nil && Not2xxCode(res.StatusCode) {
 		if err := c.bindResponseBody(df, c.opts.not2xxError); err != nil {
 			return err
 		}

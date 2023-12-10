@@ -1,8 +1,11 @@
 package ghttp
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/guonaihong/gout/encode"
@@ -95,4 +98,35 @@ func ForceHttps(endpoint string) string {
 		endpoint = endpoint[index+3:]
 	}
 	return fmt.Sprintf("https://%s", endpoint)
+}
+
+// CheckResponse
+// returns an error (of type *Error) if the response status code is not 2xx.
+func checkResponse(response *http.Response, xxError Not2xxError) error {
+	if response == nil {
+		return errors.New("http: nil Response")
+	}
+
+	if xxError == nil || !Not2xxCode(response.StatusCode) {
+		return nil
+	}
+	var buf strings.Builder
+
+	if response.Request != nil {
+		buf.WriteString("method=")
+		buf.WriteString(response.Request.Method)
+		buf.WriteByte(' ')
+	}
+
+	buf.WriteString("code=")
+	buf.WriteString(strconv.Itoa(response.StatusCode))
+
+	e := xxError.String()
+
+	if e != "" {
+		buf.WriteString(" message=")
+		buf.WriteString(e)
+	}
+
+	return errors.New(buf.String())
 }

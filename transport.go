@@ -3,6 +3,7 @@ package ghttp
 import "net/http"
 
 type Not2xxError interface {
+	Reset()
 	String() string
 }
 
