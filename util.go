@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/guonaihong/gout/encode"
 	"github.com/guonaihong/gout/setting"
-	"github.com/zdz1715/go-utils/goutils"
 )
 
 func FullPath(endpoint, path string) string {
@@ -64,13 +64,18 @@ func toString(v any) string {
 	}
 	switch s := val.Interface().(type) {
 	case []byte:
-		return goutils.BytesToString(s)
+		return bytesToString(s)
 	case string:
 		return s
 	}
 	return ""
 }
 
+func bytesToString(s []byte) string {
+	//return *(*string)(unsafe.Pointer(&b))
+	// go 1.20+
+	return unsafe.String(unsafe.SliceData(s), len(s))
+}
 func EncodeQuery(v any) (string, error) {
 	if v == nil {
 		return "", nil

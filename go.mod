@@ -2,10 +2,7 @@ module github.com/zdz1715/ghttp
 
 go 1.20
 
-require (
-	github.com/guonaihong/gout v0.3.8
-	github.com/zdz1715/go-utils v0.0.0-20231208070115-ae3f6e322e19
-)
+require github.com/guonaihong/gout v0.3.8
 
 require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
