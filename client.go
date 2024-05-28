@@ -1,15 +1,20 @@
 package ghttp
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/zdz1715/ghttp/encoding"
+	_ "github.com/zdz1715/ghttp/encoding/json"
+
 	"github.com/guonaihong/gout"
 	"github.com/guonaihong/gout/dataflow"
-	"github.com/guonaihong/gout/middler"
 )
 
 // Client is an HTTP client.
@@ -110,11 +115,18 @@ func (c *Client) dataflow(ctx context.Context, method, endpoint, path string) *d
 }
 
 // Invoke makes a rpc call procedure for remote service.
-func (c *Client) Invoke(ctx context.Context, method, path string, body, reply any, opts ...CallOption) (*http.Response, error) {
-	if _, ok := ctx.Deadline(); !ok && c.opts.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
-		defer cancel()
+func (c *Client) Invoke(ctx context.Context, method, path string, args any, reply any, opts ...CallOption) (*http.Response, error) {
+	var (
+		body io.Reader
+	)
+	// set timeout
+	if c.opts.timeout > 0 {
+		// the timeout period of this request will not be overwritten
+		if _, ok := ctx.Deadline(); !ok {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
+			defer cancel()
+		}
 	}
 
 	// reset not2xxError
@@ -122,18 +134,22 @@ func (c *Client) Invoke(ctx context.Context, method, path string, body, reply an
 		c.opts.not2xxError.Reset()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, FullPath(c.Endpoint(), path), nil)
-	if err != nil {
-		return nil, err
+	// marshal request body
+	if args != nil {
+		codec := encoding.GetCodec(ContentSubtype(c.opts.contentType))
+		if codec == nil {
+			return nil, fmt.Errorf("request: unsupported content type: %s", c.opts.contentType)
+		}
+		bodyBytes, err := codec.Marshal(args)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(bodyBytes)
 	}
 
-	// set header
-	if c.opts.userAgent != "" {
-		req.Header.Set("User-Agent", c.opts.userAgent)
-	}
-	if c.opts.contentType != "" {
-		req.Header.Set("Accept", c.opts.contentType)
-		req.Header.Set("Content-Type", c.opts.contentType)
+	req, err := http.NewRequestWithContext(ctx, method, FullPath(c.Endpoint(), path), body)
+	if err != nil {
+		return nil, err
 	}
 
 	// apply CallOption
@@ -143,12 +159,30 @@ func (c *Client) Invoke(ctx context.Context, method, path string, body, reply an
 		}
 	}
 
+	// set and override header
+	if c.opts.userAgent != "" {
+		req.Header.Set("User-Agent", c.opts.userAgent)
+	}
+
+	if c.opts.contentType != "" {
+		req.Header.Set("Accept", c.opts.contentType)
+		req.Header.Set("Content-Type", c.opts.contentType)
+	}
+
 	response, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	// bind body
+	// bind response body
+	if c.opts.not2xxError != nil && Not2xxCode(response.StatusCode) {
+		if err := c.BindResponseBody(response, c.opts.not2xxError); err != nil {
+			return nil, err
+		}
+		if err = checkResponse(response, c.opts.not2xxError); err != nil {
+			return nil, err
+		}
+	}
 
 	// apply CallOption
 	for _, callOpt := range opts {
@@ -157,113 +191,78 @@ func (c *Client) Invoke(ctx context.Context, method, path string, body, reply an
 		}
 	}
 
+	// 最后绑定响应body
+	if err = c.BindResponseBody(response, reply); err != nil {
+		return nil, err
+	}
+
 	return response, nil
-
-	callOption := mustCallOption(opts...)
-
-	if c.opts.not2xxError != nil {
-		c.opts.not2xxError.Reset()
-	}
-
-	df := c.dataflow(ctx, method, c.Endpoint(), path)
-
-	df.RequestUse(middler.WithRequestMiddlerFunc(func(req *http.Request) error {
-		return c.requestHandle(req, callOption)
-	}))
-
-	var res *http.Response
-	df.ResponseUse(middler.WithResponseMiddlerFunc(func(response *http.Response) error {
-		res = response
-		return c.responseHandle(response, callOption, df, reply)
-	}))
-
-	if err := c.setBody(df, body); err != nil {
-		return nil, err
-	}
-
-	if err := df.Do(); err != nil {
-		return nil, err
-	}
-
-	if err := checkResponse(res, c.opts.not2xxError); err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }
 
-func (c *Client) setBody(df *dataflow.DataFlow, body any) error {
-	// set body
-	if body == nil {
+func (c *Client) BindResponseBody(response *http.Response, reply any) error {
+	if reply == nil {
 		return nil
 	}
-
-	switch c.contentType {
-	case "json":
-		df.SetJSON(body)
-	case "xml":
-		df.SetXML(body)
-	default:
-		return fmt.Errorf("unsupported request content type: %q", c.opts.contentType)
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = c.opts.contentType
 	}
-	return nil
+	codec := encoding.GetCodec(ContentSubtype(contentType))
+	if codec == nil {
+		return fmt.Errorf("response: unsupported content type: %s", c.opts.contentType)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	return codec.Unmarshal(body, reply)
 }
 
-func (c *Client) bindResponseBody(df *dataflow.DataFlow, body any) error {
-	// bind body
-	if body == nil {
-		return nil
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	if req == nil {
+		return nil, errors.New("nil http request")
 	}
-
-	switch c.contentType {
-	case "json":
-		df.BindJSON(body)
-	case "xml":
-		df.BindXML(body)
-	default:
-		return fmt.Errorf("unsupported response content type: %q", c.opts.contentType)
+	// set URL
+	newUrl := FullPath(c.Endpoint(), req.URL.String())
+	nu, err := url.Parse(newUrl)
+	if err != nil {
+		return nil, err
 	}
-	return nil
-}
-
-// requestHandle
-// Middleware cannot be set body and bound
-func (c *Client) requestHandle(req *http.Request, option CallOption) error {
-	if option != nil {
-		if err := option.Before(req); err != nil {
-			return err
+	req.URL = nu
+	// set timeout
+	ctx := req.Context()
+	if c.opts.timeout > 0 {
+		// the timeout period of this request will not be overwritten
+		if _, ok := ctx.Deadline(); !ok {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
+			defer cancel()
+			req.WithContext(ctx)
 		}
 	}
-	// set and override header
-	if c.opts.userAgent != "" {
+	// ser header
+	if req.UserAgent() == "" && c.opts.userAgent != "" {
 		req.Header.Set("User-Agent", c.opts.userAgent)
 	}
-	if c.opts.contentType != "" {
+
+	if req.Header.Get("Content-Type") == "" && c.opts.contentType != "" {
 		req.Header.Set("Accept", c.opts.contentType)
 		req.Header.Set("Content-Type", c.opts.contentType)
 	}
 
-	return nil
-}
-
-func (c *Client) responseHandle(res *http.Response, option CallOption, df *dataflow.DataFlow, reply any) error {
-	alreadyBind := false
-	if c.opts.not2xxError != nil && Not2xxCode(res.StatusCode) {
-		if err := c.bindResponseBody(df, c.opts.not2xxError); err != nil {
-			return err
-		}
-		alreadyBind = true
+	response, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
 	}
 
-	if option != nil {
-		if err := option.After(res); err != nil {
-			return err
+	if c.opts.not2xxError != nil && Not2xxCode(response.StatusCode) {
+		if err := c.BindResponseBody(response, c.opts.not2xxError); err != nil {
+			return nil, err
+		}
+		if err := checkResponse(response, c.opts.not2xxError); err != nil {
+			return nil, err
 		}
 	}
-	// 最后绑定响应body
-	if !alreadyBind {
-		return c.bindResponseBody(df, reply)
-	}
 
-	return nil
+	return c.hc.Do(req)
 }

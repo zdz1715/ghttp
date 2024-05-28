@@ -23,6 +23,5 @@ func RegisterCodec(name string, codec Codec) {
 }
 
 func GetCodec(name string) Codec {
-
 	return registeredCodecs[name]
 }

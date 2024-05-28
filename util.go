@@ -115,7 +115,7 @@ func ForceHttps(endpoint string) string {
 // returns an error (of type *Error) if the response status code is not 2xx.
 func checkResponse(response *http.Response, xxError Not2xxError) error {
 	if response == nil {
-		return errors.New("http: nil Response")
+		return errors.New("nil http response")
 	}
 
 	if xxError == nil || !Not2xxCode(response.StatusCode) {
@@ -124,18 +124,15 @@ func checkResponse(response *http.Response, xxError Not2xxError) error {
 	var buf strings.Builder
 
 	if response.Request != nil {
-		buf.WriteString("method=")
 		buf.WriteString(response.Request.Method)
 		buf.WriteByte(' ')
 	}
 
-	buf.WriteString("code=")
 	buf.WriteString(strconv.Itoa(response.StatusCode))
-
 	e := xxError.String()
 
 	if e != "" {
-		buf.WriteString(" message=")
+		buf.WriteString(": ")
 		buf.WriteString(e)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/zdz1715/ghttp"
 )
@@ -59,20 +60,24 @@ func main() {
 	// 	请求 https://gitlab.com/oauth/token
 	err = gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
 	if err != nil {
-		fmt.Printf("Invoke /oauth/token, error: %s", err)
+		fmt.Printf("Invoke /oauth/token, error: %s\n", err)
+	} else {
+		fmt.Printf("Invoke /oauth/token success, reply: %+v\n", reply)
 	}
-
-	fmt.Printf("Invoke /oauth/token success, reply: %+v", reply)
 
 	args = map[string]string{
 		"page": "1",
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	// 	请求 https://gitlab.com/api/v4/projects
-	err = gitlab.Invoke(context.Background(), http.MethodGet, "/api/v4/projects", args, &reply)
+	err = gitlab.Invoke(ctx, http.MethodGet, "/api/v4/projects", args, &reply)
 	if err != nil {
-		fmt.Printf("Invoke /api/v4/projects, error: %s", err)
+		fmt.Printf("Invoke /api/v4/projects, error: %s\n", err)
+	} else {
+		fmt.Printf("Invoke /api/v4/projects success, reply: %+v\n", reply)
 	}
-	fmt.Printf("Invoke /api/v4/projects success, reply: %+v", reply)
+
 }
 
 type Gitlab struct {
