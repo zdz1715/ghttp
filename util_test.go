@@ -1,7 +1,10 @@
 package ghttp
 
 import (
+	"context"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestFullPath(t *testing.T) {
@@ -200,4 +203,14 @@ func TestContentSubtype(t *testing.T) {
 			t.Logf("ContentSubtype() failed: target=%s want=%s", target, v.want)
 		}
 	}
+}
+
+func TestForceHttps(t *testing.T) {
+	ctx := context.Background()
+	d, ok := ctx.Deadline()
+	fmt.Println(d, ok)
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Minute*10)
+	d, ok = ctx.Deadline()
+	fmt.Println(d, ok)
 }

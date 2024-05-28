@@ -15,6 +15,7 @@ import (
 // Client is an HTTP client.
 type Client struct {
 	opts        clientOptions
+	hc          *http.Client
 	cc          *gout.Client
 	target      *url.URL
 	contentType string
@@ -52,6 +53,7 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 
 	c := &Client{
 		opts:        options,
+		hc:          hc,
 		cc:          gout.NewWithOpt(ccOpts...),
 		contentType: ContentSubtype(options.contentType),
 	}
@@ -109,6 +111,54 @@ func (c *Client) dataflow(ctx context.Context, method, endpoint, path string) *d
 
 // Invoke makes a rpc call procedure for remote service.
 func (c *Client) Invoke(ctx context.Context, method, path string, body, reply any, opts ...CallOption) (*http.Response, error) {
+	if _, ok := ctx.Deadline(); !ok && c.opts.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
+		defer cancel()
+	}
+
+	// reset not2xxError
+	if c.opts.not2xxError != nil {
+		c.opts.not2xxError.Reset()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, FullPath(c.Endpoint(), path), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// set header
+	if c.opts.userAgent != "" {
+		req.Header.Set("User-Agent", c.opts.userAgent)
+	}
+	if c.opts.contentType != "" {
+		req.Header.Set("Accept", c.opts.contentType)
+		req.Header.Set("Content-Type", c.opts.contentType)
+	}
+
+	// apply CallOption
+	for _, callOpt := range opts {
+		if err = callOpt.Before(req); err != nil {
+			return nil, err
+		}
+	}
+
+	response, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// bind body
+
+	// apply CallOption
+	for _, callOpt := range opts {
+		if err = callOpt.After(response); err != nil {
+			return nil, err
+		}
+	}
+
+	return response, nil
+
 	callOption := mustCallOption(opts...)
 
 	if c.opts.not2xxError != nil {

@@ -60,7 +60,3 @@ func (c *CallOptions) After(response *http.Response) error {
 	}
 	return nil
 }
-
-func (c *CallOptions) validate() error {
-	return nil
-}
