@@ -128,10 +128,12 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 			defer cancel()
 		}
 	}
-
+	// todo: 并发不安全
+	var not2xxError Not2xxError
 	// reset not2xxError
 	if c.opts.not2xxError != nil {
-		c.opts.not2xxError.Reset()
+		not2xxError = c.opts.not2xxError
+		not2xxError.Reset()
 	}
 
 	// marshal request body
