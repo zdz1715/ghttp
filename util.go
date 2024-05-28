@@ -51,7 +51,12 @@ func ContentSubtype(contentType string) string {
 	if right < left {
 		return ""
 	}
-	return contentType[left+1 : right]
+	subContentType := contentType[left+1 : right]
+	left = strings.Index(subContentType, "+")
+	if left >= 0 {
+		return subContentType[left+1:]
+	}
+	return subContentType
 }
 
 func toString(v any) string {
@@ -76,6 +81,7 @@ func bytesToString(s []byte) string {
 	// go 1.20+
 	return unsafe.String(unsafe.SliceData(s), len(s))
 }
+
 func EncodeQuery(v any) (string, error) {
 	if v == nil {
 		return "", nil

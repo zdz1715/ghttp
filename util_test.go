@@ -154,3 +154,50 @@ func TestEncodeQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestContentSubtype(t *testing.T) {
+	tests := []struct {
+		contentType string
+		want        string
+	}{
+		{
+			contentType: "application/json",
+			want:        "json",
+		},
+		{
+			contentType: "application/xml",
+			want:        "xml",
+		},
+		{
+			contentType: "application/x-www-form-urlencoded",
+			want:        "x-www-form-urlencoded",
+		},
+		{
+			contentType: "multipart/form-data",
+			want:        "form-data",
+		},
+		{
+			contentType: "application/vnd.api+json",
+			want:        "json",
+		},
+		{
+			contentType: "multipart/byteranges",
+			want:        "byteranges",
+		},
+		{
+			contentType: "application/json; charset=utf-8",
+			want:        "json",
+		},
+		{
+			contentType: "application/vnd.docker.distribution.manifest.v2+json; charset=utf-8",
+			want:        "json",
+		},
+	}
+
+	for _, v := range tests {
+		target := ContentSubtype(v.contentType)
+		if target != v.want {
+			t.Logf("ContentSubtype() failed: target=%s want=%s", target, v.want)
+		}
+	}
+}

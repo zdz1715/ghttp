@@ -70,26 +70,37 @@ func main() {
 		"grant_type": "password",
 		"client_id":  "app",
 	}
+
+	gitlab, err := NewGitlab()
+	if err != nil {
+		panic(err)
+	}
+
 	var reply any
 	// 	请求 https://gitlab.com/oauth/token
-	err := Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
+	err = gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
 	if err != nil {
-		fmt.Printf("error: %s", err)
+		fmt.Printf("Invoke /oauth/token, error: %s", err)
 	}
-	fmt.Printf("%+v", reply)
+
+	fmt.Printf("Invoke /oauth/token success, reply: %+v", reply)
 
 	args = map[string]string{
 		"page": "1",
 	}
 	// 	请求 https://gitlab.com/api/v4/projects
-	err = Invoke(context.Background(), http.MethodGet, "/api/v4/projects", args, &reply)
+	err = gitlab.Invoke(context.Background(), http.MethodGet, "/api/v4/projects", args, &reply)
 	if err != nil {
-		fmt.Printf("error: %s", err)
+		fmt.Printf("Invoke /api/v4/projects, error: %s", err)
 	}
-	fmt.Printf("%+v", reply)
+	fmt.Printf("Invoke /api/v4/projects success, reply: %+v", reply)
 }
 
-func Invoke(ctx context.Context, method, path string, args, reply any) error {
+type Gitlab struct {
+	cc *ghttp.Client
+}
+
+func NewGitlab() (*Gitlab, error) {
 	not2xxBody := &gitlabError{}
 	clientOps := []ghttp.ClientOption{
 		ghttp.WithDebug(true),
@@ -100,12 +111,16 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 		ghttp.WithUserAgent("sdk/gitlab-v0.0.1"),
 		ghttp.WithNot2xxError(not2xxBody),
 	}
-
 	client, err := ghttp.NewClient(context.Background(), clientOps...)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return &Gitlab{
+		cc: client,
+	}, nil
+}
 
+func (g *Gitlab) Invoke(ctx context.Context, method, path string, args, reply any) error {
 	callOptions := &ghttp.CallOptions{
 
 		// Authorization header
@@ -124,18 +139,17 @@ func Invoke(ctx context.Context, method, path string, args, reply any) error {
 	}
 
 	// get请求把body换成query
+	var err error
 	if method == http.MethodGet && args != nil {
 		callOptions.Query = args
-		args = nil
+		_, err = g.cc.Invoke(ctx, method, path, nil, reply, callOptions)
+	} else {
+		_, err = g.cc.Invoke(ctx, method, path, args, reply, callOptions)
 	}
 
-	_, err = client.Invoke(ctx, method, path, args, reply, callOptions)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
+
 
 
 ```
