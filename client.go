@@ -15,9 +15,6 @@ import (
 
 	"github.com/zdz1715/ghttp/encoding"
 	_ "github.com/zdz1715/ghttp/encoding/json"
-
-	"github.com/guonaihong/gout"
-	"github.com/guonaihong/gout/dataflow"
 )
 
 type Not2xxError interface {
@@ -36,7 +33,6 @@ type clientOptions struct {
 	userAgent   string
 	contentType string
 	proxy       func(*http.Request) (*url.URL, error)
-	debug       bool
 	not2xxError func() Not2xxError
 }
 
@@ -96,18 +92,10 @@ func WithNot2xxError(f func() Not2xxError) ClientOption {
 	}
 }
 
-// WithDebug enable debug.
-func WithDebug(debug bool) ClientOption {
-	return func(c *clientOptions) {
-		c.debug = debug
-	}
-}
-
 // Client is an HTTP client.
 type Client struct {
 	opts        clientOptions
 	hc          *http.Client
-	cc          *gout.Client
 	target      *url.URL
 	contentType string
 }
@@ -154,36 +142,12 @@ func (c *Client) SetEndpoint(endpoint string) {
 	if endpoint == "" || endpoint == c.opts.endpoint {
 		return
 	}
+	c.target = nil
 	c.opts.endpoint = endpoint
 }
 
 func (c *Client) Endpoint() string {
 	return c.opts.endpoint
-}
-
-func (c *Client) dataflow(ctx context.Context, method, endpoint, path string) *dataflow.DataFlow {
-	var df *dataflow.DataFlow
-	fullPath := FullPath(endpoint, path)
-	switch method {
-	case http.MethodPost:
-		df = c.cc.POST(fullPath)
-	case http.MethodHead:
-		df = c.cc.HEAD(fullPath)
-	case http.MethodOptions:
-		df = c.cc.OPTIONS(fullPath)
-	case http.MethodDelete:
-		df = c.cc.DELETE(fullPath)
-	case http.MethodPut:
-		df = c.cc.PUT(fullPath)
-	case http.MethodPatch:
-		df = c.cc.PATCH(fullPath)
-	default:
-		df = c.cc.GET(fullPath)
-	}
-	if c.opts.debug {
-		df.Debug(c.opts.debug)
-	}
-	return df.WithContext(ctx).NoAutoContentType()
 }
 
 func (c *Client) bindNot2xxError(response *http.Response) error {
@@ -224,14 +188,13 @@ func (c *Client) BindResponseBody(response *http.Response, reply any) error {
 	if reply == nil {
 		return nil
 	}
-	contentType := response.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = c.contentType
-	}
-	codec := encoding.GetCodec(ContentSubtype(contentType))
+
+	codec := CodecForResponse(response, c.contentType)
 	if codec == nil {
 		return fmt.Errorf("response: unsupported content type: %s", c.opts.contentType)
 	}
+
+	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
@@ -239,18 +202,14 @@ func (c *Client) BindResponseBody(response *http.Response, reply any) error {
 	return codec.Unmarshal(body, reply)
 }
 
-func (c *Client) setHeader(override bool, req *http.Request) {
-	if c.opts.userAgent != "" {
-		if override || req.UserAgent() == "" {
-			req.Header.Set("User-Agent", c.opts.userAgent)
-		}
+func (c *Client) setHeader(req *http.Request) {
+	if c.opts.userAgent != "" && req.UserAgent() == "" {
+		req.Header.Set("User-Agent", c.opts.userAgent)
 	}
 
-	if c.opts.contentType != "" {
-		if override || req.Header.Get("Content-Type") == "" {
-			req.Header.Set("Accept", c.opts.contentType)
-			req.Header.Set("Content-Type", c.opts.contentType)
-		}
+	if c.opts.contentType != "" && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Accept", c.opts.contentType)
+		req.Header.Set("Content-Type", c.opts.contentType)
 	}
 }
 
@@ -266,40 +225,6 @@ func (c *Client) setTimeout(ctx context.Context) (context.Context, context.Cance
 	return ctx, func() {}, false
 }
 
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	if req == nil {
-		return nil, errors.New("nil http request")
-	}
-	// set URL
-	newUrl := FullPath(c.Endpoint(), req.URL.String())
-	nu, err := url.Parse(newUrl)
-	if err != nil {
-		return nil, err
-	}
-	req.URL = nu
-
-	// set timeout
-	ctx, cancel, ok := c.setTimeout(req.Context())
-	defer cancel()
-	if ok {
-		req.WithContext(ctx)
-	}
-
-	// set  header
-	c.setHeader(false, req)
-
-	response, err := c.hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = c.bindNot2xxError(response); err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
 // Invoke makes a rpc call procedure for remote service.
 func (c *Client) Invoke(ctx context.Context, method, path string, args any, reply any, opts ...CallOption) (*http.Response, error) {
 	var (
@@ -307,6 +232,7 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 		cancel context.CancelFunc
 	)
 
+	// set timeout, Do() is not set repeatedly and does not trigger defer()
 	ctx, cancel, _ = c.setTimeout(ctx)
 	defer cancel()
 
@@ -328,33 +254,66 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 		return nil, err
 	}
 
-	// apply CallOption
+	response, err := c.Do(req, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	// 最后绑定响应body
+	if err = c.BindResponseBody(response, reply); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// Do send an HTTP request and decodes the body of response into target.
+func (c *Client) Do(req *http.Request, opts ...CallOption) (*http.Response, error) {
+	if req == nil {
+		return nil, errors.New("nil http request")
+	}
+	var err error
+	// apply CallOption before
 	for _, callOpt := range opts {
-		if err = callOpt.Before(req); err != nil {
+		if req, err = callOpt.Before(req); err != nil {
 			return nil, err
 		}
 	}
-	// set and override header
-	c.setHeader(true, req)
+
+	// set url
+	fullPath := req.URL.String()
+	newUrl := FullPath(c.Endpoint(), fullPath)
+	if newUrl != fullPath {
+		nu, err := url.Parse(newUrl)
+		if err != nil {
+			return nil, err
+		}
+		req.URL = nu
+	}
+
+	// set timeout
+	ctx, cancel, ok := c.setTimeout(req.Context())
+	if ok {
+		defer cancel()
+		req = req.WithContext(ctx)
+	}
+
+	// set  header
+	c.setHeader(req)
 
 	response, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = c.bindNot2xxError(response); err != nil {
-		return nil, err
-	}
-
-	// apply CallOption
+	// apply CallOption After
 	for _, callOpt := range opts {
 		if err = callOpt.After(response); err != nil {
 			return nil, err
 		}
 	}
 
-	// 最后绑定响应body
-	if err = c.BindResponseBody(response, reply); err != nil {
+	if err = c.bindNot2xxError(response); err != nil {
 		return nil, err
 	}
 

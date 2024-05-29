@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/zdz1715/ghttp/encoding"
 )
 
 func FullPath(endpoint, path string) string {
@@ -71,4 +73,20 @@ func ProxyURL(address string) func(*http.Request) (*url.URL, error) {
 	}
 
 	return http.ProxyURL(proxy)
+}
+
+func CodecForResponse(r *http.Response, name ...string) encoding.Codec {
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "" {
+		contentType = ContentSubtype(contentType)
+	} else {
+		if len(name) > 0 {
+			contentType = name[0]
+		}
+	}
+	codec := encoding.GetCodec(contentType)
+	if codec != nil {
+		return codec
+	}
+	return encoding.GetCodec("json")
 }

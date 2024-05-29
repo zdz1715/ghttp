@@ -7,7 +7,7 @@ import (
 )
 
 type CallOption interface {
-	Before(request *http.Request) error
+	Before(request *http.Request) (*http.Request, error)
 	After(response *http.Response) error
 }
 
@@ -25,21 +25,18 @@ type CallOptions struct {
 	// hooks
 	BeforeHook func(request *http.Request) error
 	AfterHook  func(response *http.Response) error
-
-	// response
-	Not2xxError Not2xxError // code返回不是2xx的绑定此结构体
 }
 
-func (c *CallOptions) Before(request *http.Request) error {
+func (c *CallOptions) Before(request *http.Request) (*http.Request, error) {
 	if c.BeforeHook != nil {
 		if err := c.BeforeHook(request); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if c.Query != nil {
 		values, err := query.Values(c.Query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if request.URL.RawQuery == "" {
 			request.URL.RawQuery = values.Encode()
@@ -53,7 +50,7 @@ func (c *CallOptions) Before(request *http.Request) error {
 	if c.BearerToken != "" {
 		request.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
-	return nil
+	return request, nil
 }
 
 func (c *CallOptions) After(response *http.Response) error {
