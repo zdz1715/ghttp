@@ -39,34 +39,26 @@ func (e *gitlabError) String() string {
 	return ""
 }
 
-func (e *gitlabError) Reset() {
-	e.Message = nil
-	e.Error = ""
-	e.ErrorDescription = ""
-}
-
 func main() {
-	args := map[string]string{
+	args := map[string]any{
 		"grant_type": "password",
 		"client_id":  "app",
 	}
 
-	gitlab, err := NewGitlab()
-	if err != nil {
-		panic(err)
-	}
+	gitlab := NewGitlab()
 
 	var reply any
 	// 	请求 https://gitlab.com/oauth/token
-	err = gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
+	err := gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
 	if err != nil {
 		fmt.Printf("Invoke /oauth/token, error: %s\n", err)
 	} else {
 		fmt.Printf("Invoke /oauth/token success, reply: %+v\n", reply)
 	}
 
-	args = map[string]string{
-		"page": "1",
+	args = map[string]any{
+		"page":       "1",
+		"membership": true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -84,8 +76,7 @@ type Gitlab struct {
 	cc *ghttp.Client
 }
 
-func NewGitlab() (*Gitlab, error) {
-	not2xxBody := &gitlabError{}
+func NewGitlab() *Gitlab {
 	clientOps := []ghttp.ClientOption{
 		ghttp.WithDebug(true),
 		ghttp.WithEndpoint("https://gitlab.com"),
@@ -93,15 +84,15 @@ func NewGitlab() (*Gitlab, error) {
 			InsecureSkipVerify: true,
 		}),
 		ghttp.WithUserAgent("sdk/gitlab-v0.0.1"),
-		ghttp.WithNot2xxError(not2xxBody),
+		ghttp.WithNot2xxError(func() ghttp.Not2xxError {
+			return new(gitlabError)
+		}),
 	}
-	client, err := ghttp.NewClient(context.Background(), clientOps...)
-	if err != nil {
-		return nil, err
-	}
+	client := ghttp.NewClient(clientOps...)
 	return &Gitlab{
 		cc: client,
-	}, nil
+	}
+
 }
 
 func (g *Gitlab) Invoke(ctx context.Context, method, path string, args, reply any) error {

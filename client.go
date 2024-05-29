@@ -3,11 +3,14 @@ package ghttp
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zdz1715/ghttp/encoding"
@@ -16,6 +19,89 @@ import (
 	"github.com/guonaihong/gout"
 	"github.com/guonaihong/gout/dataflow"
 )
+
+type Not2xxError interface {
+	String() string
+}
+
+// ClientOption is HTTP client option.
+type ClientOption func(*clientOptions)
+
+// Client is an HTTP transport client.
+type clientOptions struct {
+	transport   http.RoundTripper
+	tlsConf     *tls.Config
+	timeout     time.Duration
+	endpoint    string
+	userAgent   string
+	contentType string
+	proxy       func(*http.Request) (*url.URL, error)
+	debug       bool
+	not2xxError func() Not2xxError
+}
+
+// WithTransport with http.RoundTrippe.
+func WithTransport(transport http.RoundTripper) ClientOption {
+	return func(c *clientOptions) {
+		c.transport = transport
+	}
+}
+
+// WithTLSConfig with tls config.
+func WithTLSConfig(cfg *tls.Config) ClientOption {
+	return func(c *clientOptions) {
+		c.tlsConf = cfg
+	}
+}
+
+// WithTimeout with client request timeout.
+func WithTimeout(timeout time.Duration) ClientOption {
+	return func(c *clientOptions) {
+		c.timeout = timeout
+	}
+}
+
+// WithUserAgent with client user agent.
+func WithUserAgent(userAgent string) ClientOption {
+	return func(c *clientOptions) {
+		c.userAgent = userAgent
+	}
+}
+
+// WithEndpoint with client addr.
+func WithEndpoint(endpoint string) ClientOption {
+	return func(c *clientOptions) {
+		c.endpoint = endpoint
+	}
+}
+
+// WithContentType with client request content type.
+func WithContentType(contentType string) ClientOption {
+	return func(c *clientOptions) {
+		c.contentType = contentType
+	}
+}
+
+// WithProxy with proxy url.
+func WithProxy(f func(*http.Request) (*url.URL, error)) ClientOption {
+	return func(c *clientOptions) {
+		c.proxy = f
+	}
+}
+
+// WithNot2xxError code返回不是2xx的绑定此结构体
+func WithNot2xxError(f func() Not2xxError) ClientOption {
+	return func(c *clientOptions) {
+		c.not2xxError = f
+	}
+}
+
+// WithDebug enable debug.
+func WithDebug(debug bool) ClientOption {
+	return func(c *clientOptions) {
+		c.debug = debug
+	}
+}
 
 // Client is an HTTP client.
 type Client struct {
@@ -26,63 +112,49 @@ type Client struct {
 	contentType string
 }
 
-func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
+func NewClient(opts ...ClientOption) *Client {
 	options := clientOptions{
-		ctx: ctx,
 		// 默认contentType
 		contentType: "application/json",
 		// 默认超时 5s
-		timeout: 5 * time.Second,
+		timeout:   5 * time.Second,
+		transport: http.DefaultTransport,
 	}
 
 	for _, o := range opts {
 		o(&options)
 	}
 
-	hc := &http.Client{}
-
 	if options.tlsConf != nil {
-		hc.Transport = &http.Transport{
-			TLSClientConfig: options.tlsConf,
+		if tr, ok := options.transport.(*http.Transport); ok {
+			tr.TLSClientConfig = options.tlsConf
 		}
 	}
 
-	ccOpts := []gout.Option{
-		gout.WithClient(hc),
-		gout.WithTimeout(options.timeout),
-	}
-
-	if options.proxy != "" {
-		ccOpts = append(ccOpts, gout.WithProxy(options.proxy))
+	if options.proxy != nil {
+		if tr, ok := options.transport.(*http.Transport); ok {
+			tr.Proxy = options.proxy
+		}
 	}
 
 	c := &Client{
-		opts:        options,
-		hc:          hc,
-		cc:          gout.NewWithOpt(ccOpts...),
+		opts: options,
+		hc: &http.Client{
+			Transport: options.transport,
+		},
 		contentType: ContentSubtype(options.contentType),
 	}
 
-	if err := c.SetEndpoint(options.endpoint); err != nil {
-		return nil, err
-	}
+	c.SetEndpoint(options.endpoint)
 
-	return c, nil
+	return c
 }
 
-func (c *Client) SetEndpoint(endpoint string) error {
+func (c *Client) SetEndpoint(endpoint string) {
 	if endpoint == "" || endpoint == c.opts.endpoint {
-		return nil
+		return
 	}
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return err
-	}
-
 	c.opts.endpoint = endpoint
-	c.target = u
-
-	return nil
 }
 
 func (c *Client) Endpoint() string {
@@ -114,31 +186,133 @@ func (c *Client) dataflow(ctx context.Context, method, endpoint, path string) *d
 	return df.WithContext(ctx).NoAutoContentType()
 }
 
-// Invoke makes a rpc call procedure for remote service.
-func (c *Client) Invoke(ctx context.Context, method, path string, args any, reply any, opts ...CallOption) (*http.Response, error) {
-	var (
-		body io.Reader
-	)
-	// set timeout
+func (c *Client) bindNot2xxError(response *http.Response) error {
+	if !Not2xxCode(response.StatusCode) || c.opts.not2xxError == nil {
+		return nil
+	}
+
+	// new not2xxError
+	not2xxError := c.opts.not2xxError()
+
+	if not2xxError == nil {
+		return nil
+	}
+
+	if err := c.BindResponseBody(response, not2xxError); err != nil {
+		return err
+	}
+
+	var buf strings.Builder
+
+	if response.Request != nil {
+		buf.WriteString(response.Request.Method)
+		buf.WriteByte(' ')
+	}
+
+	buf.WriteString(strconv.Itoa(response.StatusCode))
+	e := not2xxError.String()
+
+	if e != "" {
+		buf.WriteString(": ")
+		buf.WriteString(e)
+	}
+
+	return errors.New(buf.String())
+}
+
+func (c *Client) BindResponseBody(response *http.Response, reply any) error {
+	if reply == nil {
+		return nil
+	}
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = c.contentType
+	}
+	codec := encoding.GetCodec(ContentSubtype(contentType))
+	if codec == nil {
+		return fmt.Errorf("response: unsupported content type: %s", c.opts.contentType)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	return codec.Unmarshal(body, reply)
+}
+
+func (c *Client) setHeader(override bool, req *http.Request) {
+	if c.opts.userAgent != "" {
+		if override || req.UserAgent() == "" {
+			req.Header.Set("User-Agent", c.opts.userAgent)
+		}
+	}
+
+	if c.opts.contentType != "" {
+		if override || req.Header.Get("Content-Type") == "" {
+			req.Header.Set("Accept", c.opts.contentType)
+			req.Header.Set("Content-Type", c.opts.contentType)
+		}
+	}
+}
+
+func (c *Client) setTimeout(ctx context.Context) (context.Context, context.CancelFunc, bool) {
 	if c.opts.timeout > 0 {
 		// the timeout period of this request will not be overwritten
 		if _, ok := ctx.Deadline(); !ok {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
-			defer cancel()
+			return ctx, cancel, true
 		}
 	}
-	// todo: 并发不安全
-	var not2xxError Not2xxError
-	// reset not2xxError
-	if c.opts.not2xxError != nil {
-		not2xxError = c.opts.not2xxError
-		not2xxError.Reset()
+	return ctx, func() {}, false
+}
+
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	if req == nil {
+		return nil, errors.New("nil http request")
 	}
+	// set URL
+	newUrl := FullPath(c.Endpoint(), req.URL.String())
+	nu, err := url.Parse(newUrl)
+	if err != nil {
+		return nil, err
+	}
+	req.URL = nu
+
+	// set timeout
+	ctx, cancel, ok := c.setTimeout(req.Context())
+	defer cancel()
+	if ok {
+		req.WithContext(ctx)
+	}
+
+	// set  header
+	c.setHeader(false, req)
+
+	response, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = c.bindNot2xxError(response); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+// Invoke makes a rpc call procedure for remote service.
+func (c *Client) Invoke(ctx context.Context, method, path string, args any, reply any, opts ...CallOption) (*http.Response, error) {
+	var (
+		body   io.Reader
+		cancel context.CancelFunc
+	)
+
+	ctx, cancel, _ = c.setTimeout(ctx)
+	defer cancel()
 
 	// marshal request body
 	if args != nil {
-		codec := encoding.GetCodec(ContentSubtype(c.opts.contentType))
+		codec := encoding.GetCodec(c.contentType)
 		if codec == nil {
 			return nil, fmt.Errorf("request: unsupported content type: %s", c.opts.contentType)
 		}
@@ -160,30 +334,16 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 			return nil, err
 		}
 	}
-
 	// set and override header
-	if c.opts.userAgent != "" {
-		req.Header.Set("User-Agent", c.opts.userAgent)
-	}
-
-	if c.opts.contentType != "" {
-		req.Header.Set("Accept", c.opts.contentType)
-		req.Header.Set("Content-Type", c.opts.contentType)
-	}
+	c.setHeader(true, req)
 
 	response, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	// bind response body
-	if c.opts.not2xxError != nil && Not2xxCode(response.StatusCode) {
-		if err := c.BindResponseBody(response, c.opts.not2xxError); err != nil {
-			return nil, err
-		}
-		if err = checkResponse(response, c.opts.not2xxError); err != nil {
-			return nil, err
-		}
+	if err = c.bindNot2xxError(response); err != nil {
+		return nil, err
 	}
 
 	// apply CallOption
@@ -199,72 +359,4 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 	}
 
 	return response, nil
-}
-
-func (c *Client) BindResponseBody(response *http.Response, reply any) error {
-	if reply == nil {
-		return nil
-	}
-	contentType := response.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = c.opts.contentType
-	}
-	codec := encoding.GetCodec(ContentSubtype(contentType))
-	if codec == nil {
-		return fmt.Errorf("response: unsupported content type: %s", c.opts.contentType)
-	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-	return codec.Unmarshal(body, reply)
-}
-
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	if req == nil {
-		return nil, errors.New("nil http request")
-	}
-	// set URL
-	newUrl := FullPath(c.Endpoint(), req.URL.String())
-	nu, err := url.Parse(newUrl)
-	if err != nil {
-		return nil, err
-	}
-	req.URL = nu
-	// set timeout
-	ctx := req.Context()
-	if c.opts.timeout > 0 {
-		// the timeout period of this request will not be overwritten
-		if _, ok := ctx.Deadline(); !ok {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, c.opts.timeout)
-			defer cancel()
-			req.WithContext(ctx)
-		}
-	}
-	// ser header
-	if req.UserAgent() == "" && c.opts.userAgent != "" {
-		req.Header.Set("User-Agent", c.opts.userAgent)
-	}
-
-	if req.Header.Get("Content-Type") == "" && c.opts.contentType != "" {
-		req.Header.Set("Accept", c.opts.contentType)
-		req.Header.Set("Content-Type", c.opts.contentType)
-	}
-
-	response, err := c.hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if c.opts.not2xxError != nil && Not2xxCode(response.StatusCode) {
-		if err := c.BindResponseBody(response, c.opts.not2xxError); err != nil {
-			return nil, err
-		}
-		if err := checkResponse(response, c.opts.not2xxError); err != nil {
-			return nil, err
-		}
-	}
-
-	return c.hc.Do(req)
 }

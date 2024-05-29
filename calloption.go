@@ -2,10 +2,14 @@ package ghttp
 
 import (
 	"net/http"
+
+	"github.com/zdz1715/ghttp/query"
 )
 
-type BeforeHook func(request *http.Request) error
-type AfterHook func(response *http.Response) error
+type CallOption interface {
+	Before(request *http.Request) error
+	After(response *http.Response) error
+}
 
 type CallOptions struct {
 	// request
@@ -19,8 +23,8 @@ type CallOptions struct {
 	BearerToken string
 
 	// hooks
-	BeforeHook BeforeHook
-	AfterHook  AfterHook
+	BeforeHook func(request *http.Request) error
+	AfterHook  func(response *http.Response) error
 
 	// response
 	Not2xxError Not2xxError // code返回不是2xx的绑定此结构体
@@ -33,14 +37,14 @@ func (c *CallOptions) Before(request *http.Request) error {
 		}
 	}
 	if c.Query != nil {
-		queryStr, err := EncodeQuery(c.Query)
+		values, err := query.Values(c.Query)
 		if err != nil {
 			return err
 		}
 		if request.URL.RawQuery == "" {
-			request.URL.RawQuery = queryStr
+			request.URL.RawQuery = values.Encode()
 		} else {
-			request.URL.RawQuery = request.URL.RawQuery + "&" + queryStr
+			request.URL.RawQuery = request.URL.RawQuery + "&" + values.Encode()
 		}
 	}
 	if c.Username != "" && c.Password != "" {
