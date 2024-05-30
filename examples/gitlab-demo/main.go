@@ -5,7 +5,10 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/zdz1715/ghttp"
 )
@@ -38,65 +41,68 @@ func (e *gitlabError) String() string {
 	return ""
 }
 
-func (e *gitlabError) Reset() {
-	e.Message = nil
-	e.Error = ""
-	e.ErrorDescription = ""
-}
-
 func main() {
-	args := map[string]string{
+	args := map[string]any{
 		"grant_type": "password",
 		"client_id":  "app",
 	}
 
-	gitlab, err := NewGitlab()
-	if err != nil {
-		panic(err)
-	}
+	gitlab := NewGitlab()
 
 	var reply any
 	// 	请求 https://gitlab.com/oauth/token
-	err = gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
+	err := gitlab.Invoke(context.Background(), http.MethodPost, "/oauth/token", args, &reply)
 	if err != nil {
-		fmt.Printf("Invoke /oauth/token, error: %s", err)
+		fmt.Printf("Invoke /oauth/token, error: %s\n", err)
+	} else {
+		fmt.Printf("Invoke /oauth/token success, reply: %+v\n", reply)
 	}
 
-	fmt.Printf("Invoke /oauth/token success, reply: %+v", reply)
-
-	args = map[string]string{
-		"page": "1",
+	args = map[string]any{
+		"page":       "1",
+		"membership": true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	// 	请求 https://gitlab.com/api/v4/projects
-	err = gitlab.Invoke(context.Background(), http.MethodGet, "/api/v4/projects", args, &reply)
+	err = gitlab.Invoke(ctx, http.MethodGet, "/api/v4/projects", args, &reply)
 	if err != nil {
-		fmt.Printf("Invoke /api/v4/projects, error: %s", err)
+		fmt.Printf("Invoke /api/v4/projects, error: %s\n", err)
+	} else {
+		fmt.Printf("Invoke /api/v4/projects success, reply: %+v\n", reply)
 	}
-	fmt.Printf("Invoke /api/v4/projects success, reply: %+v", reply)
+
 }
 
 type Gitlab struct {
 	cc *ghttp.Client
 }
 
-func NewGitlab() (*Gitlab, error) {
-	not2xxBody := &gitlabError{}
+func NewGitlab() *Gitlab {
 	clientOps := []ghttp.ClientOption{
-		ghttp.WithDebug(true),
+		ghttp.WithDebug(func() ghttp.DebugInterface {
+			return &ghttp.Debug{
+				Writer: os.Stdout,
+				Trace:  true,
+				TraceCallback: func(w io.Writer, info ghttp.TraceInfo) {
+					_, _ = w.Write(info.Table())
+				},
+			}
+		}),
 		ghttp.WithEndpoint("https://gitlab.com"),
 		ghttp.WithTLSConfig(&tls.Config{
 			InsecureSkipVerify: true,
 		}),
 		ghttp.WithUserAgent("sdk/gitlab-v0.0.1"),
-		ghttp.WithNot2xxError(not2xxBody),
+		ghttp.WithNot2xxError(func() ghttp.Not2xxError {
+			return new(gitlabError)
+		}),
 	}
-	client, err := ghttp.NewClient(context.Background(), clientOps...)
-	if err != nil {
-		return nil, err
-	}
+	client := ghttp.NewClient(clientOps...)
 	return &Gitlab{
 		cc: client,
-	}, nil
+	}
+
 }
 
 func (g *Gitlab) Invoke(ctx context.Context, method, path string, args, reply any) error {

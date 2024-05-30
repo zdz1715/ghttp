@@ -1,16 +1,12 @@
 package ghttp
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
-	"reflect"
-	"strconv"
+	"net/url"
 	"strings"
-	"unsafe"
 
-	"github.com/guonaihong/gout/encode"
-	"github.com/guonaihong/gout/setting"
+	"github.com/zdz1715/ghttp/encoding"
 )
 
 func FullPath(endpoint, path string) string {
@@ -22,18 +18,6 @@ func FullPath(endpoint, path string) string {
 		return path
 	}
 	return fmt.Sprintf("%s/%s", strings.TrimRight(endpoint, "/"), strings.TrimLeft(path, "/"))
-}
-
-func isZero(arg any) bool {
-	if arg == nil {
-		return true
-	}
-	val := reflect.ValueOf(arg)
-	if val.Kind() == reflect.Pointer {
-		return val.IsNil()
-
-	}
-	return false
 }
 
 func ContentSubtype(contentType string) string {
@@ -59,46 +43,6 @@ func ContentSubtype(contentType string) string {
 	return subContentType
 }
 
-func toString(v any) string {
-	val := reflect.ValueOf(v)
-	for val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			return ""
-		}
-		val = val.Elem()
-	}
-	switch s := val.Interface().(type) {
-	case []byte:
-		return bytesToString(s)
-	case string:
-		return s
-	}
-	return ""
-}
-
-func bytesToString(s []byte) string {
-	//return *(*string)(unsafe.Pointer(&b))
-	// go 1.20+
-	return unsafe.String(unsafe.SliceData(s), len(s))
-}
-
-func EncodeQuery(v any) (string, error) {
-	if v == nil {
-		return "", nil
-	}
-	query := toString(v)
-	if query != "" {
-		return strings.TrimLeft(query, "?"), nil
-	}
-	enc := encode.NewQueryEncode(setting.Setting{
-		NotIgnoreEmpty: false,
-	})
-	if err := encode.Encode(v, enc); err != nil {
-		return "", err
-	}
-	return enc.End(), nil
-}
-
 func Not2xxCode(code int) bool {
 	return code < 200 || code > 299
 }
@@ -111,33 +55,64 @@ func ForceHttps(endpoint string) string {
 	return fmt.Sprintf("https://%s", endpoint)
 }
 
-// CheckResponse
-// returns an error (of type *Error) if the response status code is not 2xx.
-func checkResponse(response *http.Response, xxError Not2xxError) error {
-	if response == nil {
-		return errors.New("http: nil Response")
+func ProxyURL(address string) func(*http.Request) (*url.URL, error) {
+	// :7890 or /proxy
+	if strings.HasPrefix(address, ":") || strings.HasPrefix(address, "/") {
+		address = fmt.Sprintf("http://127.0.0.1%s", address)
+	}
+	// 127.0.0.1:7890
+	if !strings.HasPrefix(address, "https://") && !strings.HasPrefix(address, "http://") {
+		address = fmt.Sprintf("http://%s", address)
 	}
 
-	if xxError == nil || !Not2xxCode(response.StatusCode) {
-		return nil
-	}
-	var buf strings.Builder
-
-	if response.Request != nil {
-		buf.WriteString("method=")
-		buf.WriteString(response.Request.Method)
-		buf.WriteByte(' ')
+	proxy, err := url.Parse(address)
+	if err != nil {
+		return func(request *http.Request) (*url.URL, error) {
+			return nil, err
+		}
 	}
 
-	buf.WriteString("code=")
-	buf.WriteString(strconv.Itoa(response.StatusCode))
+	return http.ProxyURL(proxy)
+}
 
-	e := xxError.String()
+func CodecForResponse(r *http.Response, name ...string) encoding.Codec {
+	c, _ := CodecNameForResponse(r, name...)
+	return c
+}
 
-	if e != "" {
-		buf.WriteString(" message=")
-		buf.WriteString(e)
+func CodecNameForResponse(r *http.Response, name ...string) (encoding.Codec, string) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "" {
+		contentType = ContentSubtype(contentType)
+	} else {
+		if len(name) > 0 {
+			contentType = name[0]
+		}
 	}
+	codec := encoding.GetCodec(contentType)
+	if codec != nil {
+		return codec, contentType
+	}
+	return encoding.GetCodec("json"), "json"
+}
 
-	return errors.New(buf.String())
+func CodecForRequest(r *http.Request, name ...string) encoding.Codec {
+	c, _ := CodecNameForRequest(r, name...)
+	return c
+}
+
+func CodecNameForRequest(r *http.Request, name ...string) (encoding.Codec, string) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "" {
+		contentType = ContentSubtype(contentType)
+	} else {
+		if len(name) > 0 {
+			contentType = name[0]
+		}
+	}
+	codec := encoding.GetCodec(contentType)
+	if codec != nil {
+		return codec, contentType
+	}
+	return encoding.GetCodec("json"), "json"
 }
