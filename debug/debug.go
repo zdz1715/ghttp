@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"os"
@@ -141,8 +142,19 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 
 		// print trace
 		if d.traceInfo.dnsDoneInfo.Addrs != nil {
-			d.write("* Host %s was resolved.", d.traceInfo.host)
+			d.write("* Host %s was resolved.", d.traceInfo.getConnHostPort)
+			for _, ipAddr := range d.traceInfo.dnsDoneInfo.Addrs {
+				if len(ipAddr.IP) == net.IPv4len {
+					d.write("* IPv4: %s", ipAddr.IP)
+				}
+				if len(ipAddr.IP) == net.IPv6len {
+					d.write("* IPv6: %s", ipAddr.IP)
+				}
+			}
 		}
+
+		fmt.Println(d.traceInfo.gotConnInfo.Conn.RemoteAddr().String())
+
 	}
 
 	// print request and response
