@@ -27,7 +27,11 @@ type TraceInfo struct {
 }
 
 type traceInfo struct {
-	host string
+	host               string
+	dnsDoneInfo        httptrace.DNSDoneInfo
+	getConnHostPort    string
+	gotConnInfo        httptrace.GotConnInfo
+	tlsConnectionState tls.ConnectionState
 
 	dnsStartTime             time.Time
 	dnsDoneTime              time.Time
@@ -49,7 +53,6 @@ type Debug struct {
 
 	mux       sync.Mutex
 	traceInfo traceInfo
-	outputs   chan string
 }
 
 func NewDefaultDebug() *Debug {
@@ -75,16 +78,21 @@ func (d *Debug) statTraceInfo() *TraceInfo {
 	}
 }
 
-func (d *Debug) write(format string, args ...any) {
-	if d.outputs == nil {
-		d.mux.Lock()
-		d.outputs = make(chan string)
-		d.mux.Unlock()
+func (d *Debug) init() {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+	if d.Writer == nil {
+		d.Writer = os.Stderr
 	}
-	d.outputs <- fmt.Sprintf(format, args...)
+}
+
+func (d *Debug) write(format string, args ...any) {
+	_, _ = fmt.Fprintf(d.Writer, format, args...)
+	_, _ = fmt.Fprintf(d.Writer, "\n")
 }
 
 func (d *Debug) Before() *httptrace.ClientTrace {
+	d.init()
 	var trace *httptrace.ClientTrace
 	if d.Trace {
 		d.traceInfo.startTime = time.Now()
@@ -95,21 +103,22 @@ func (d *Debug) Before() *httptrace.ClientTrace {
 			},
 			DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
 				d.traceInfo.dnsDoneTime = time.Now()
-				d.write("* Host %s was resolved.", d.traceInfo.host)
+				d.traceInfo.dnsDoneInfo = dnsInfo
 			},
 			GetConn: func(hostPort string) {
 				d.traceInfo.getConnTime = time.Now()
-				d.write("*   Trying %s...", hostPort)
+				d.traceInfo.getConnHostPort = hostPort
 			},
 			GotConn: func(connInfo httptrace.GotConnInfo) {
 				d.traceInfo.gotConnTime = time.Now()
-				d.write("* Connected to %s", connInfo.Conn.RemoteAddr())
+				d.traceInfo.gotConnInfo = connInfo
 			},
 			TLSHandshakeStart: func() {
 				d.traceInfo.tlsHandshakeStartTime = time.Now()
 			},
-			TLSHandshakeDone: func(tls.ConnectionState, error) {
+			TLSHandshakeDone: func(state tls.ConnectionState, err error) {
 				d.traceInfo.tlsHandshakeDoneTime = time.Now()
+				d.traceInfo.tlsConnectionState = state
 			},
 			GotFirstResponseByte: func() {
 				d.traceInfo.gotFirstResponseByteTime = time.Now()
@@ -129,6 +138,11 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 		if d.TraceCallback != nil {
 			d.TraceCallback(d.statTraceInfo())
 		}
+
+		// print trace
+		if d.traceInfo.dnsDoneInfo.Addrs != nil {
+			d.write("* Host %s was resolved.", d.traceInfo.host)
+		}
 	}
 
 	// print request and response
@@ -139,16 +153,4 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 	}
 
 	d.write("> %s %s %s", request.Method, path, request.Proto)
-
-	if d.Writer == nil {
-		d.mux.Lock()
-		d.Writer = os.Stderr
-		d.mux.Unlock()
-	}
-
-	select {
-	case msg := <-d.outputs:
-		_, _ = d.Writer.Write([]byte(msg))
-		_, _ = d.Writer.Write([]byte("\n"))
-	}
 }
