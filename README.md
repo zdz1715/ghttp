@@ -166,15 +166,7 @@ func main() {
 ## Debug
 设置`WithDebug`开启
 ```go
-ghttp.WithDebug(func() ghttp.DebugInterface {
-  return &ghttp.Debug{
-    Writer: os.Stdout,
-    Trace:  true, // 开启trace
-    TraceCallback: func(w io.Writer, info ghttp.TraceInfo) { // trace完成时回调
-        _, _ = w.Write(info.Table())
-    },
-  }
-}),
+ghttp.WithDebug(ghttp.DefaultDebug)
 ```
 ```shell
 --------------------------------------------

@@ -133,10 +133,13 @@ type Debug struct {
 	traceInfo traceInfo
 }
 
-func NewDefaultDebug() *Debug {
+var DefaultDebug = func() DebugInterface {
 	return &Debug{
-		Writer: os.Stdout,
+		Writer: os.Stderr,
 		Trace:  true,
+		TraceCallback: func(w io.Writer, info TraceInfo) {
+			_, _ = w.Write(info.Table())
+		},
 	}
 }
 
