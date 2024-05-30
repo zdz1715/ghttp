@@ -49,6 +49,7 @@ type Debug struct {
 
 	mux       sync.Mutex
 	traceInfo traceInfo
+	outputs   chan string
 }
 
 func NewDefaultDebug() *Debug {
@@ -75,13 +76,12 @@ func (d *Debug) statTraceInfo() *TraceInfo {
 }
 
 func (d *Debug) write(format string, args ...any) {
-	if d.Writer == nil {
+	if d.outputs == nil {
 		d.mux.Lock()
-		d.Writer = os.Stderr
+		d.outputs = make(chan string)
 		d.mux.Unlock()
 	}
-	_, _ = fmt.Fprintf(d.Writer, format, args...)
-	_, _ = fmt.Fprintln(d.Writer)
+	d.outputs <- fmt.Sprintf(format, args...)
 }
 
 func (d *Debug) Before() *httptrace.ClientTrace {
@@ -95,7 +95,7 @@ func (d *Debug) Before() *httptrace.ClientTrace {
 			},
 			DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
 				d.traceInfo.dnsDoneTime = time.Now()
-				d.write("*Host %s was resolved.", d.traceInfo.host)
+				d.write("* Host %s was resolved.", d.traceInfo.host)
 			},
 			GetConn: func(hostPort string) {
 				d.traceInfo.getConnTime = time.Now()
@@ -139,4 +139,16 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 	}
 
 	d.write("> %s %s %s", request.Method, path, request.Proto)
+
+	if d.Writer == nil {
+		d.mux.Lock()
+		d.Writer = os.Stderr
+		d.mux.Unlock()
+	}
+
+	select {
+	case msg := <-d.outputs:
+		_, _ = d.Writer.Write([]byte(msg))
+		_, _ = d.Writer.Write([]byte("\n"))
+	}
 }
