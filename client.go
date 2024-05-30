@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zdz1715/ghttp/debug"
-
 	"github.com/zdz1715/ghttp/encoding"
 	_ "github.com/zdz1715/ghttp/encoding/json"
 )
@@ -37,7 +35,7 @@ type clientOptions struct {
 	contentType string
 	proxy       func(*http.Request) (*url.URL, error)
 	not2xxError func() Not2xxError
-	debug       func() debug.Interface
+	debug       func() DebugInterface
 }
 
 // WithTransport with http.RoundTrippe.
@@ -97,7 +95,7 @@ func WithNot2xxError(f func() Not2xxError) ClientOption {
 }
 
 // WithDebug debug options
-func WithDebug(f func() debug.Interface) ClientOption {
+func WithDebug(f func() DebugInterface) ClientOption {
 	return func(c *clientOptions) {
 		c.debug = f
 	}
@@ -257,7 +255,7 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 		if err != nil {
 			return nil, err
 		}
-		body = bytes.NewReader(bodyBytes)
+		body = bytes.NewBuffer(bodyBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, FullPath(c.Endpoint(), path), body)
@@ -311,7 +309,7 @@ func (c *Client) Do(req *http.Request, opts ...CallOption) (*http.Response, erro
 
 	// set  header
 	c.setHeader(req)
-	var debugHook debug.Interface
+	var debugHook DebugInterface
 
 	if c.opts.debug != nil {
 		debugHook = c.opts.debug()

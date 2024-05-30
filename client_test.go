@@ -1,33 +1,34 @@
 package ghttp
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"testing"
-
-	"github.com/zdz1715/ghttp/debug"
 )
 
 func TestWithDebug(t *testing.T) {
 	client := NewClient(
 		WithEndpoint("https://gitlab.com"),
-		WithDebug(func() debug.Interface {
-			return &debug.Debug{
+		WithDebug(func() DebugInterface {
+			return &Debug{
 				Writer: os.Stdout,
 				Trace:  true,
-				TraceCallback: func(info *debug.TraceInfo) {
-					fmt.Printf("trace info: %+v\n", info)
+				TraceCallback: func(w io.Writer, info TraceInfo) {
+					_, _ = w.Write(info.Table())
 				},
 			}
 		}),
 	)
 
-	req, err := http.NewRequest(http.MethodGet, "/api/v4/projects", nil)
-	if err != nil {
-		t.Fatal(err)
+	data := map[string]interface{}{
+		"grant_type": "password",
 	}
-	_, err = client.Do(req, &CallOptions{
+
+	var reply any
+	_, err := client.Invoke(context.Background(), http.MethodPost, "/oauth/token", data, &reply, &CallOptions{
 		Query: map[string]any{
 			"page":       "1",
 			"membership": true,
@@ -37,4 +38,6 @@ func TestWithDebug(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	fmt.Printf("Invoke /api/v4/projects success, reply: %+v\n", reply)
 }

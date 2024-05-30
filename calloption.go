@@ -13,14 +13,13 @@ type CallOption interface {
 
 type CallOptions struct {
 	// request
-	Query any
+	Query any // set query
 
 	// Auth
-	// Basic Auth
-	Username string
+	Username string // Basic Auth
 	Password string
-	// Bearer Token
-	BearerToken string
+
+	BearerToken string // Bearer Token
 
 	// hooks
 	BeforeHook func(request *http.Request) error

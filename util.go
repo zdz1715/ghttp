@@ -76,6 +76,11 @@ func ProxyURL(address string) func(*http.Request) (*url.URL, error) {
 }
 
 func CodecForResponse(r *http.Response, name ...string) encoding.Codec {
+	c, _ := CodecNameForResponse(r, name...)
+	return c
+}
+
+func CodecNameForResponse(r *http.Response, name ...string) (encoding.Codec, string) {
 	contentType := r.Header.Get("Content-Type")
 	if contentType != "" {
 		contentType = ContentSubtype(contentType)
@@ -86,7 +91,28 @@ func CodecForResponse(r *http.Response, name ...string) encoding.Codec {
 	}
 	codec := encoding.GetCodec(contentType)
 	if codec != nil {
-		return codec
+		return codec, contentType
 	}
-	return encoding.GetCodec("json")
+	return encoding.GetCodec("json"), "json"
+}
+
+func CodecForRequest(r *http.Request, name ...string) encoding.Codec {
+	c, _ := CodecNameForRequest(r, name...)
+	return c
+}
+
+func CodecNameForRequest(r *http.Request, name ...string) (encoding.Codec, string) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "" {
+		contentType = ContentSubtype(contentType)
+	} else {
+		if len(name) > 0 {
+			contentType = name[0]
+		}
+	}
+	codec := encoding.GetCodec(contentType)
+	if codec != nil {
+		return codec, contentType
+	}
+	return encoding.GetCodec("json"), "json"
 }

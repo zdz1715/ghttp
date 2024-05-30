@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/zdz1715/ghttp"
@@ -78,7 +80,15 @@ type Gitlab struct {
 
 func NewGitlab() *Gitlab {
 	clientOps := []ghttp.ClientOption{
-		ghttp.WithDebug(true),
+		ghttp.WithDebug(func() ghttp.DebugInterface {
+			return &ghttp.Debug{
+				Writer: os.Stdout,
+				Trace:  true,
+				TraceCallback: func(w io.Writer, info ghttp.TraceInfo) {
+					_, _ = w.Write(info.Table())
+				},
+			}
+		}),
 		ghttp.WithEndpoint("https://gitlab.com"),
 		ghttp.WithTLSConfig(&tls.Config{
 			InsecureSkipVerify: true,
