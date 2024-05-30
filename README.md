@@ -180,63 +180,64 @@ ghttp.WithDebug(func() ghttp.DebugInterface {
 --------------------------------------------
 Trace                         Value                         
 --------------------------------------------
-DNSDuration                   0s                            
-ConnectDuration               164.1172ms                    
-TLSHandshakeDuration          161.5662ms                    
-RequestDuration               0s                            
-WaitResponseDuration          297.2657ms                    
-TotalDuration                 461.3829ms                    
+DNSDuration                   3.955292ms                    
+ConnectDuration               102.718541ms                  
+TLSHandshakeDuration          98.159333ms                   
+RequestDuration               138.834µs                     
+WaitResponseDuration          307.559875ms                  
+TotalDuration                 412.40375ms                   
 --------------------------------------------
-*   Trying 127.0.0.1:63210...
-* Connected to gitlab.com (127.0.0.1) port 63210
+* Host gitlab.com:443 was resolved.
+* IPv4: 198.18.7.159
+*   Trying 198.18.7.159:443...
+* Connected to gitlab.com (198.18.7.159) port 443
 * SSL connection using TLS 1.3 / TLS_AES_128_GCM_SHA256
 * ALPN: server accepted h2
-* Server certificate:
-*   subject: CN=gitlab.com
-*   notBefore: 2024-04-12 00:00:00 +0000 UTC
-*   notAfter: 2025-05-11 23:59:59 +0000 UTC
-*   issuer: C=GB; ST=Greater Manchester; L=Salford; O=Sectigo Limited; CN=Sectigo RSA Domain Validation Secure Server CA
-*   SSL certificate verify ok.
 * using HTTP/1.1
-> POST /oauth/token?membership=true&page=1 HTTP/1.1
+> POST /oauth/token HTTP/1.1
+> User-Agent: sdk/gitlab-v0.0.1
 > Accept: application/json
 > Content-Type: application/json
+> Beforehook: BeforeHook
+> Authorization: Basic Z2l0bGFiOnBhc3N3b3Jk
 >
 
 {
+    "client_id": "app",
     "grant_type": "password"
 }
 
-< HTTP/2.0 400 Bad Request
-> X-Download-Options: noopen
-> X-Gitlab-Meta: {"correlation_id":"01HZ48D05K3E8F71G09EXDMG48","version":"1"}
-> Set-Cookie: _cfuvid=UGRIFEQC.lqlEzqwR6ymzq0zQe6HyFchNQlvwDLltE8-1717056209213-0.0.1.1-604800000; path=/; domain=.gitlab.com; HttpOnly; Secure; SameSite=None
+> HTTP/2.0 401 Unauthorized
+> Content-Security-Policy: base-uri 'self'; child-src https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.googletagmanager.com/ns.html https://*.zuora.com/apps/PublicHostedPageLite.do https://gitlab.com/admin/ https://gitlab.com/assets/ https://gitlab.com/-/speedscope/index.html https://gitlab.com/-/sandbox/ 'self' https://gitlab.com/assets/ blob: data:; connect-src 'self' https://gitlab.com wss://gitlab.com https://sentry.gitlab.net https://new-sentry.gitlab.net https://customers.gitlab.com https://snowplow.trx.gitlab.net https://sourcegraph.com https://collector.prd-278964.gl-product-analytics.com; default-src 'self'; font-src 'self'; form-action 'self' https: http:; frame-ancestors 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.googletagmanager.com/ns.html https://*.zuora.com/apps/PublicHostedPageLite.do https://gitlab.com/admin/ https://gitlab.com/assets/ https://gitlab.com/-/speedscope/index.html https://gitlab.com/-/sandbox/; img-src 'self' data: blob: http: https:; manifest-src 'self'; media-src 'self' data: blob: http: https:; object-src 'none'; report-uri https://new-sentry.gitlab.net/api/4/security/?sentry_key=f5573e26de8f4293b285e556c35dfd6e&sentry_environment=gprd; script-src 'strict-dynamic' 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.recaptcha.net/ https://apis.google.com https://*.zuora.com/apps/PublicHostedPageLite.do 'nonce-HZQNGx99dfvcmkJEPBTxvQ=='; style-src 'self' 'unsafe-inline'; worker-src 'self' https://gitlab.com/assets/ blob: data:
+> Vary: Origin
+> X-Request-Id: 01HZ491CCGAH2VB7AC4JB34V9P
+> Strict-Transport-Security: max-age=31536000
+> Date: Thu, 30 May 2023 08:14:37 GMT
 > Content-Type: application/json; charset=utf-8
 > Referrer-Policy: strict-origin-when-cross-origin
-> Www-Authenticate: Bearer realm="Doorkeeper", error="invalid_grant", error_description="The provided authorization grant is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client."
-> Report-To: {"endpoints":[{"url":"https:\/\/a.nel.cloudflare.com\/report\/v4?s=14HQQcEuSoirAmB89OjP1C%2BR0hyiLtcXUgepnx2QfcGFodpQGwARF%2BR%2Bznmxj8th0R1TOVpvTSYjji4DrMLzApbQCqKw4ZY0g72zWI7mA3cq4%2Fcfq8kB2Jign9A%3D"}],"group":"cf-nel","max_age":604800}
-> Server: cloudflare
-> X-Permitted-Cross-Domain-Policies: none
-> Gitlab-Sv: web-gke-us-east1-c
-> Cf-Cache-Status: DYNAMIC
-> Nel: {"success_fraction":0.01,"report_to":"cf-nel","max_age":604800}
-> Cf-Ray: 88bd353a0c848b24-HKG
-> Cache-Control: no-store
-> Content-Security-Policy: base-uri 'self'; child-src https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.googletagmanager.com/ns.html https://*.zuora.com/apps/PublicHostedPageLite.do https://gitlab.com/admin/ https://gitlab.com/assets/ https://gitlab.com/-/speedscope/index.html https://gitlab.com/-/sandbox/ 'self' https://gitlab.com/assets/ blob: data:; connect-src 'self' https://gitlab.com wss://gitlab.com https://sentry.gitlab.net https://new-sentry.gitlab.net https://customers.gitlab.com https://snowplow.trx.gitlab.net https://sourcegraph.com https://collector.prd-278964.gl-product-analytics.com; default-src 'self'; font-src 'self'; form-action 'self' https: http:; frame-ancestors 'self'; frame-src https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.googletagmanager.com/ns.html https://*.zuora.com/apps/PublicHostedPageLite.do https://gitlab.com/admin/ https://gitlab.com/assets/ https://gitlab.com/-/speedscope/index.html https://gitlab.com/-/sandbox/; img-src 'self' data: blob: http: https:; manifest-src 'self'; media-src 'self' data: blob: http: https:; object-src 'none'; report-uri https://new-sentry.gitlab.net/api/4/security/?sentry_key=f5573e26de8f4293b285e556c35dfd6e&sentry_environment=gprd; script-src 'strict-dynamic' 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.recaptcha.net/ https://apis.google.com https://*.zuora.com/apps/PublicHostedPageLite.do 'nonce-tvf6QQ1+r4ahhZwSduumvQ=='; style-src 'self' 'unsafe-inline'; worker-src 'self' https://gitlab.com/assets/ blob: data:
-> X-Frame-Options: SAMEORIGIN
-> X-Request-Id: 01HZ48D05K3E8F71G09EXDMG48
-> X-Runtime: 0.015358
-> X-Xss-Protection: 0
-> Gitlab-Lb: haproxy-main-31-lb-gprd
-> Strict-Transport-Security: max-age=31536000
-> Date: Thu, 30 May 2024 08:03:29 GMT
-> Vary: Origin
 > X-Content-Type-Options: nosniff
+> X-Permitted-Cross-Domain-Policies: none
+> X-Runtime: 0.019682
+> X-Xss-Protection: 0
+> Nel: {"success_fraction":0.01,"report_to":"cf-nel","max_age":604800}
+> Cf-Ray: 88bd45882b400491-HKG
+> Www-Authenticate: Bearer realm="Doorkeeper", error="invalid_client", error_description="Client authentication failed due to unknown client, no client authentication included, or unsupported authentication method."
+> Cf-Cache-Status: DYNAMIC
+> Server: cloudflare
+> Cache-Control: no-store
+> X-Download-Options: noopen
+> X-Frame-Options: SAMEORIGIN
+> X-Gitlab-Meta: {"correlation_id":"01HZ491CCGAH2VB7AC4JB34V9P","version":"1"}
+> Gitlab-Lb: haproxy-main-50-lb-gprd
+> Gitlab-Sv: web-gke-us-east1-d
+> Report-To: {"endpoints":[{"url":"https:\/\/a.nel.cloudflare.com\/report\/v4?s=AyFAiSgvHeQibif2jWObbbpAEbr4IShSNonhMsU6aFonp8WhnGrQjpiuB24ZP1jrJ9WzioZxI71YWH1joouXwDpqFqS4bos%2FEOGKlo7cCFH%2BClMrQJU0Dn0ubHs%3D"}],"group":"cf-nel","max_age":604800}
+> Set-Cookie: _cfuvid=gGPOP3vi.ezz1OSuEf1PeJJ70YcFLNWGGyGKMKA05PE-1717056877089-0.0.1.1-604800000; path=/; domain=.gitlab.com; HttpOnly; Secure; SameSite=None
 
 {
-    "error": "invalid_grant",
-    "error_description": "The provided authorization grant is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client."
+    "error": "invalid_client",
+    "error_description": "Client authentication failed due to unknown client, no client authentication included, or unsupported authentication method."
 }
+
 ```
 ## examples
 - [gitlab-demo](./examples/gitlab-demo/main.go): 快速创建一个gitlab sdk demo

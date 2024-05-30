@@ -254,7 +254,7 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 		}
 	}
 
-	write(d.Writer, "< %s %s", response.Proto, response.Status)
+	write(d.Writer, "> %s %s", response.Proto, response.Status)
 	for k, v := range response.Header {
 		write(d.Writer, "> %s: %s", k, strings.Join(v, ","))
 	}
