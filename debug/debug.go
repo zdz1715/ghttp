@@ -6,8 +6,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
+	"os"
+	"sync"
 	"time"
 )
+
+type Interface interface {
+	Before() *httptrace.ClientTrace
+	After(request *http.Request, response *http.Response)
+}
 
 type TraceInfo struct {
 	DNSDuration          time.Duration `json:"DNSDuration,omitempty" yaml:"DNSDuration" xml:"DNSDuration"`
@@ -20,6 +27,8 @@ type TraceInfo struct {
 }
 
 type traceInfo struct {
+	host string
+
 	dnsStartTime             time.Time
 	dnsDoneTime              time.Time
 	getConnTime              time.Time
@@ -34,13 +43,22 @@ type traceInfo struct {
 }
 
 type Debug struct {
-	Writer io.Writer
-	Trace  bool
+	Writer        io.Writer
+	Trace         bool
+	TraceCallback func(*TraceInfo)
 
+	mux       sync.Mutex
 	traceInfo traceInfo
 }
 
-func (d *Debug) TraceInfo() *TraceInfo {
+func NewDefaultDebug() *Debug {
+	return &Debug{
+		Writer: os.Stdout,
+		Trace:  true,
+	}
+}
+
+func (d *Debug) statTraceInfo() *TraceInfo {
 	if !d.Trace {
 		return nil
 	}
@@ -56,21 +74,36 @@ func (d *Debug) TraceInfo() *TraceInfo {
 	}
 }
 
-func (d *Debug) Before(request *http.Request) (*http.Request, error) {
+func (d *Debug) write(format string, args ...any) {
+	if d.Writer == nil {
+		d.mux.Lock()
+		d.Writer = os.Stderr
+		d.mux.Unlock()
+	}
+	_, _ = fmt.Fprintf(d.Writer, format, args...)
+	_, _ = fmt.Fprintln(d.Writer)
+}
+
+func (d *Debug) Before() *httptrace.ClientTrace {
+	var trace *httptrace.ClientTrace
 	if d.Trace {
 		d.traceInfo.startTime = time.Now()
-		trace := &httptrace.ClientTrace{
+		trace = &httptrace.ClientTrace{
 			DNSStart: func(info httptrace.DNSStartInfo) {
 				d.traceInfo.dnsStartTime = time.Now()
+				d.traceInfo.host = info.Host
 			},
 			DNSDone: func(dnsInfo httptrace.DNSDoneInfo) {
 				d.traceInfo.dnsDoneTime = time.Now()
+				d.write("*Host %s was resolved.", d.traceInfo.host)
 			},
 			GetConn: func(hostPort string) {
 				d.traceInfo.getConnTime = time.Now()
+				d.write("*   Trying %s...", hostPort)
 			},
 			GotConn: func(connInfo httptrace.GotConnInfo) {
 				d.traceInfo.gotConnTime = time.Now()
+				d.write("* Connected to %s", connInfo.Conn.RemoteAddr())
 			},
 			TLSHandshakeStart: func() {
 				d.traceInfo.tlsHandshakeStartTime = time.Now()
@@ -85,34 +118,25 @@ func (d *Debug) Before(request *http.Request) (*http.Request, error) {
 				d.traceInfo.wroteRequestTime = time.Now()
 			},
 		}
-
-		request = request.WithContext(
-			httptrace.WithClientTrace(request.Context(), trace),
-		)
 	}
 
-	// print request
-	if d.Writer == nil {
-		return request, nil
+	return trace
+}
+
+func (d *Debug) After(request *http.Request, response *http.Response) {
+	if d.Trace {
+		d.traceInfo.responseDoneTime = time.Now()
+		if d.TraceCallback != nil {
+			d.TraceCallback(d.statTraceInfo())
+		}
 	}
 
+	// print request and response
 	path := request.URL.RequestURI()
 
 	if path == "" {
 		path = "/"
 	}
 
-	fmt.Fprintf(d.Writer, "> %s %s %s\n", request.Method, path, request.Proto)
-	return request, nil
-}
-
-func (d *Debug) After(response *http.Response) error {
-	if d.Trace {
-		d.traceInfo.responseDoneTime = time.Now()
-	}
-	// print response
-	if d.Writer == nil {
-		return nil
-	}
-	return nil
+	d.write("> %s %s %s", request.Method, path, request.Proto)
 }

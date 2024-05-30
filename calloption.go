@@ -7,7 +7,7 @@ import (
 )
 
 type CallOption interface {
-	Before(request *http.Request) (*http.Request, error)
+	Before(request *http.Request) error
 	After(response *http.Response) error
 }
 
@@ -27,16 +27,16 @@ type CallOptions struct {
 	AfterHook  func(response *http.Response) error
 }
 
-func (c *CallOptions) Before(request *http.Request) (*http.Request, error) {
+func (c *CallOptions) Before(request *http.Request) error {
 	if c.BeforeHook != nil {
 		if err := c.BeforeHook(request); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if c.Query != nil {
 		values, err := query.Values(c.Query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if request.URL.RawQuery == "" {
 			request.URL.RawQuery = values.Encode()
@@ -50,7 +50,7 @@ func (c *CallOptions) Before(request *http.Request) (*http.Request, error) {
 	if c.BearerToken != "" {
 		request.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
-	return request, nil
+	return nil
 }
 
 func (c *CallOptions) After(response *http.Response) error {

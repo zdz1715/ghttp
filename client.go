@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/zdz1715/ghttp/debug"
 
 	"github.com/zdz1715/ghttp/encoding"
 	_ "github.com/zdz1715/ghttp/encoding/json"
@@ -34,6 +37,7 @@ type clientOptions struct {
 	contentType string
 	proxy       func(*http.Request) (*url.URL, error)
 	not2xxError func() Not2xxError
+	debug       func() debug.Interface
 }
 
 // WithTransport with http.RoundTrippe.
@@ -85,10 +89,17 @@ func WithProxy(f func(*http.Request) (*url.URL, error)) ClientOption {
 	}
 }
 
-// WithNot2xxError code返回不是2xx的绑定此结构体
+// WithNot2xxError handle response status code < 200 and code > 299
 func WithNot2xxError(f func() Not2xxError) ClientOption {
 	return func(c *clientOptions) {
 		c.not2xxError = f
+	}
+}
+
+// WithDebug debug options
+func WithDebug(f func() debug.Interface) ClientOption {
+	return func(c *clientOptions) {
+		c.debug = f
 	}
 }
 
@@ -275,7 +286,7 @@ func (c *Client) Do(req *http.Request, opts ...CallOption) (*http.Response, erro
 	var err error
 	// apply CallOption before
 	for _, callOpt := range opts {
-		if req, err = callOpt.Before(req); err != nil {
+		if err = callOpt.Before(req); err != nil {
 			return nil, err
 		}
 	}
@@ -300,10 +311,27 @@ func (c *Client) Do(req *http.Request, opts ...CallOption) (*http.Response, erro
 
 	// set  header
 	c.setHeader(req)
+	var debugHook debug.Interface
+
+	if c.opts.debug != nil {
+		debugHook = c.opts.debug()
+	}
+
+	if debugHook != nil {
+		if trace := debugHook.Before(); trace != nil {
+			req = req.WithContext(
+				httptrace.WithClientTrace(req.Context(), trace),
+			)
+		}
+	}
 
 	response, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if debugHook != nil {
+		debugHook.After(req, response)
 	}
 
 	// apply CallOption After
