@@ -178,7 +178,7 @@ func reflectStruct(values url.Values, val reflect.Value, scope string) error {
 			name = scope + "[" + name + "]"
 		}
 
-		if opts.Contains("omitempty") && isEmptyValue(sv) {
+		if opts.Contains(OmitemptyTagOpt) && isEmptyValue(sv) {
 			continue
 		}
 
@@ -202,7 +202,7 @@ func reflectStruct(values url.Values, val reflect.Value, scope string) error {
 			}
 
 			var del string
-			if delValue := opts.Get("del"); delValue != "" {
+			if delValue := opts.Get(DelTagOpt); delValue != "" {
 				switch delValue {
 				case "comma":
 					del = ","
@@ -320,7 +320,7 @@ func valueString(v reflect.Value, opts tagOptions) string {
 	}
 
 	// query:"name,int"
-	if v.Kind() == reflect.Bool && opts.Contains("int") {
+	if v.Kind() == reflect.Bool && opts.Contains(IntTagOpt) {
 		if v.Bool() {
 			return "1"
 		}
@@ -333,20 +333,20 @@ func valueString(v reflect.Value, opts tagOptions) string {
 			return ""
 		}
 		// query:"create_time,unix"
-		if opts.Contains("unix") {
+		if opts.Contains(UnixTagOpt) {
 			return strconv.FormatInt(t.Unix(), 10)
 		}
 		// query:"create_time,unixmilli"
-		if opts.Contains("unixmilli") {
+		if opts.Contains(UnixmilliTagOpt) {
 			return strconv.FormatInt((t.UnixNano() / 1e6), 10)
 		}
 		// query:"create_time,unixnano"
-		if opts.Contains("unixnano") {
+		if opts.Contains(UnixnanoTagOpt) {
 			return strconv.FormatInt(t.UnixNano(), 10)
 		}
 
 		// query:"create_time,time_format:2006-01-02 15:04:05"
-		if layout := opts.Get("time_format"); layout != "" {
+		if layout := opts.Get(TimeFormatTagOpt); layout != "" {
 			return t.Format(layout)
 		}
 
