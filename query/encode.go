@@ -21,7 +21,6 @@ var timeType = reflect.TypeOf(time.Time{})
 // Each exported struct field is encoded as a URL parameter unless
 //
 //   - the field's tag is "-", or
-//   - the field's tag is "-,...", or
 //   - the field is empty and its tag specifies the "omitempty" option
 //
 // The empty values are false, 0, any nil pointer or interface value, any array
@@ -165,11 +164,14 @@ func reflectStruct(values url.Values, val reflect.Value, scope string) error {
 
 		sv := val.Field(i)
 		tag := sf.Tag.Get(Tag)
-		name, opts := parseTag(tag)
-		if name == "-" {
+
+		if tag == "-" {
 			continue
 		}
 
+		fieldName, opts := parseTag(tag)
+
+		name := fieldName
 		if name == "" {
 			name = sf.Name
 		}
@@ -243,8 +245,14 @@ func reflectStruct(values url.Values, val reflect.Value, scope string) error {
 		}
 
 		if sv.Kind() == reflect.Struct {
-			if err := reflectStruct(values, sv, name); err != nil {
-				return err
+			if ok := opts.Contains(InlineTagOpt); fieldName == "" && ok {
+				if err := reflectStruct(values, sv, ""); err != nil {
+					return err
+				}
+			} else {
+				if err := reflectStruct(values, sv, name); err != nil {
+					return err
+				}
 			}
 			continue
 		}

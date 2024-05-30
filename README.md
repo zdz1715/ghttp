@@ -133,10 +133,11 @@ type CallOptions struct {
 - `struct`
 
 #### struct tag
-> query:"yourName,omitempty,int,unix,del:*delimiter*,time_format:2006-01-02"
+> query:"yourName,inline,omitempty,int,unix,del:*delimiter*,time_format:2006-01-02"
 
-- `yourName`: 自定义名字(为"-"则忽略)，未设置则使用字段名
+- `yourName`: 自定义名字("-"则忽略)，未设置则使用字段名，若是"-,"则"-"为名字
 - `omitempty`: 值为空则忽略
+- `inline`: `,inline`会使子结构与父结构平级
 - `int`: `bool`类型时，`true`为`1`，`false`为`0`
 - `unix`: `time.time`类型时，返回时间戳(秒)
 - `unixmilli`: `time.time`类型时，返回时间戳(毫秒)

@@ -7,6 +7,8 @@ const (
 
 	IntTagOpt = "int"
 
+	InlineTagOpt = "inline"
+
 	UnixTagOpt       = "unix"
 	UnixmilliTagOpt  = "unixmilli"
 	UnixnanoTagOpt   = "unixnano"
