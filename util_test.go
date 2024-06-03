@@ -17,18 +17,18 @@ func TestFullPath(t *testing.T) {
 		},
 		{
 			path:     "page?limit=0",
-			endpoint: "https://www.baidu.com",
-			want:     "https://www.baidu.com/page?limit=0",
+			endpoint: "www.baidu.com",
+			want:     "http://www.baidu.com/page?limit=0",
 		},
 		{
 			path:     "/page",
-			endpoint: "https://www.baidu.com/",
-			want:     "https://www.baidu.com/page",
+			endpoint: "www.baidu.com/",
+			want:     "http://www.baidu.com/page",
 		},
 		{
 			path:     "/page?limit=0",
-			endpoint: "https://www.baidu.com/",
-			want:     "https://www.baidu.com/page?limit=0",
+			endpoint: "www.baidu.com/",
+			want:     "http://www.baidu.com/page?limit=0",
 		},
 		{
 			path:     "https://www.baidu.com/page?limit=0",
@@ -47,10 +47,10 @@ func TestFullPath(t *testing.T) {
 		},
 	}
 
-	for _, v := range tests {
-		target := FullPath(v.path, v.endpoint)
+	for i, v := range tests {
+		target := FullPath(v.endpoint, v.path)
 		if target != v.want {
-			t.Logf("FullPath() failed: target=%s want=%s", target, v.want)
+			t.Logf("index: %d, FullPath() failed: target=%s want=%s", i, target, v.want)
 		}
 	}
 }

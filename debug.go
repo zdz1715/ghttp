@@ -2,6 +2,7 @@ package ghttp
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,8 @@ type DebugInterface interface {
 }
 
 type TraceInfo struct {
+	ctx context.Context
+
 	DNSDuration          time.Duration `json:"DNSDuration,omitempty" yaml:"DNSDuration" xml:"DNSDuration"`
 	ConnectDuration      time.Duration `json:"connectDuration,omitempty" yaml:"connectDuration" xml:"connectDuration"`
 	TLSHandshakeDuration time.Duration `json:"TLSHandshakeDuration,omitempty" yaml:"TLSHandshakeDuration" xml:"TLSHandshakeDuration"`
@@ -31,6 +34,10 @@ type TraceInfo struct {
 	WaitResponseDuration time.Duration `json:"waitResponseDuration,omitempty" yaml:"waitResponseDuration" xml:"waitResponseDuration"`
 	ResponseDuration     time.Duration `json:"responseDuration,omitempty" yaml:"responseDuration" xml:"responseDuration"`
 	TotalDuration        time.Duration `json:"totalDuration,omitempty" yaml:"totalDuration" xml:"totalDuration"`
+}
+
+func (t TraceInfo) Context() context.Context {
+	return t.ctx
 }
 
 func (t TraceInfo) String() string {
@@ -143,11 +150,12 @@ var DefaultDebug = func() DebugInterface {
 	}
 }
 
-func (d *Debug) statTraceInfo() TraceInfo {
+func (d *Debug) statTraceInfo(ctx context.Context) TraceInfo {
 	if !d.Trace {
 		return TraceInfo{}
 	}
 	return TraceInfo{
+		ctx:                  ctx,
 		DNSDuration:          d.traceInfo.dnsDoneTime.Sub(d.traceInfo.dnsStartTime),
 		ConnectDuration:      d.traceInfo.gotConnTime.Sub(d.traceInfo.getConnTime),
 		TLSHandshakeDuration: d.traceInfo.tlsHandshakeDoneTime.Sub(d.traceInfo.tlsHandshakeStartTime),
@@ -226,7 +234,7 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 	if d.Trace {
 		d.traceInfo.responseDoneTime = time.Now()
 		if d.TraceCallback != nil {
-			d.TraceCallback(d.Writer, d.statTraceInfo())
+			d.TraceCallback(d.Writer, d.statTraceInfo(request.Context()))
 		}
 		if d.traceInfo.host == "" {
 			d.traceInfo.host = request.URL.Host

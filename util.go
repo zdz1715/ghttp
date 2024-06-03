@@ -13,11 +13,22 @@ func FullPath(endpoint, path string) string {
 	if endpoint == "" {
 		return path
 	}
-	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") ||
-		strings.HasPrefix(path, endpoint) {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path
 	}
-	return fmt.Sprintf("%s/%s", strings.TrimRight(endpoint, "/"), strings.TrimLeft(path, "/"))
+
+	var fullPath string
+	if strings.HasPrefix(path, endpoint) {
+		fullPath = path
+	} else {
+		fullPath = fmt.Sprintf("%s/%s", strings.TrimRight(endpoint, "/"), strings.TrimLeft(path, "/"))
+	}
+
+	if !strings.HasPrefix(fullPath, "http://") && !strings.HasPrefix(fullPath, "https://") {
+		return "http://" + fullPath
+	}
+
+	return fullPath
 }
 
 func ContentSubtype(contentType string) string {
