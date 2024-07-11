@@ -27,8 +27,8 @@ func main() {
   var reply any
   _, err := client.Invoke(context.Background(), http.MethodGet, "/api/v4/projects", nil, &reply, &ghttp.CallOptions{
     Query: map[string]any{
-      "page":       "1",
-      "membership": true,
+      "page": "1",
+      //"membership": true,
     },
   })
   if err != nil {
@@ -70,7 +70,7 @@ _, err := client.Invoke(ctx, http.MethodGet, "https://gitlab.com/api/v4/projects
 ```
 #### 配置客户端的`Content-type`, 默认：`application/json`
 `WithContentType(contentType string) ClientOption`
-#### 配置客户端代理，默认：`http.ProxyFromEnvironment` 
+#### 配置客户端代理，默认：`http.ProxyFromEnvironment` , 可使用辅助函数`ghttp.ProxyURL(url)`
 `WithProxy(f func(*http.Request) (*url.URL, error))`
 #### 配置响应状态码不是`2xx`时，要`bind`的结构体, 也会直接返回错误，方便后续`bind`预期的响应数据
 > 可自定义，需实现`Not2xxError`方法
@@ -153,16 +153,33 @@ type CallOptions struct {
 ### Encoding
 > 根据`content-type`自动加载对应的`Codec`实例，`content-type`会提取子部分类型，如：`application/json`或`application/vnd.api+json`都为`json`,
 #### 自定义`Codec`
-覆盖默认的序列化实例
+覆盖默认的json序列化，使用`sonic`
 ```go
+package main
+
 import (
-    "github.com/bytedance/sonic"
-    "github.com/zdz1715/ghttp/encoding"
+  "github.com/bytedance/sonic"
+  "github.com/zdz1715/ghttp"
 )
 
-func main() {
-    encoding.RegisterCodec("json", sonic.ConfigDefault)
+type codec struct{}
+
+func (codec) Name() string {
+  return "sonic-json"
 }
+
+func (codec) Marshal(v interface{}) ([]byte, error) {
+  return sonic.Marshal(v)
+}
+
+func (codec) Unmarshal(data []byte, v interface{}) error {
+  return sonic.Unmarshal(data, v)
+}
+
+func main() {
+  ghttp.RegisterCodecByContentType("application/json", codec{})
+}
+
 ```
 ## Debug
 设置`WithDebug`开启

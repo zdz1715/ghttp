@@ -25,7 +25,7 @@ var (
 )
 
 func init() {
-	encoding.RegisterCodec(Name, codec{})
+	encoding.RegisterCodec(codec{})
 }
 
 // codec is a Codec implementation with json.
@@ -61,4 +61,8 @@ func (codec) Unmarshal(data []byte, v interface{}) error {
 		}
 		return json.Unmarshal(data, m)
 	}
+}
+
+func (codec) Name() string {
+	return Name
 }

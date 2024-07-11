@@ -255,8 +255,8 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 	if request.GetBody != nil {
 		if reqBodyReader, err := request.GetBody(); err == nil {
 			reqBody, _ := io.ReadAll(reqBodyReader)
-			codec, codecName := CodecNameForRequest(request)
-			reqBodyBs, _ := formatIndent(codecName, codec, reqBody)
+			codec, _ := CodecForRequest(request)
+			reqBodyBs, _ := formatIndent(codec, reqBody)
 			if len(reqBodyBs) > 0 {
 				write(d.Writer, "")
 				write(d.Writer, "%s", string(reqBodyBs))
@@ -275,8 +275,8 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 		//resBodyReader := io.Reader(response.Body)
 		if responseBody, err := io.ReadAll(response.Body); err == nil {
 			response.Body = io.NopCloser(bytes.NewBuffer(responseBody))
-			codec, codecName := CodecNameForResponse(response)
-			resBodyBs, _ := formatIndent(codecName, codec, responseBody)
+			codec, _ := CodecForResponse(response)
+			resBodyBs, _ := formatIndent(codec, responseBody)
 			if len(resBodyBs) > 0 {
 				write(d.Writer, "")
 				write(d.Writer, "%s", string(resBodyBs))
@@ -287,7 +287,7 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 
 }
 
-func formatIndent(codecName string, codec encoding.Codec, data []byte) (result []byte, err error) {
+func formatIndent(codec encoding.Codec, data []byte) (result []byte, err error) {
 	if len(data) == 0 || codec == nil {
 		return result, nil
 	}
@@ -297,7 +297,7 @@ func formatIndent(codecName string, codec encoding.Codec, data []byte) (result [
 		return nil, err
 	}
 
-	switch codecName {
+	switch codec.Name() {
 	case "json":
 		result, err = json.MarshalIndent(anyData, "", "    ")
 	default:

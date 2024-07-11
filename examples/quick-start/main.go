@@ -17,8 +17,8 @@ func main() {
 	var reply any
 	_, err := client.Invoke(context.Background(), http.MethodGet, "/api/v4/projects", nil, &reply, &ghttp.CallOptions{
 		Query: map[string]any{
-			"page":       "1",
-			"membership": true,
+			"page": "1",
+			//"membership": true,
 		},
 	})
 	if err != nil {

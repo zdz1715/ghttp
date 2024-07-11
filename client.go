@@ -13,9 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/zdz1715/ghttp/encoding"
-	_ "github.com/zdz1715/ghttp/encoding/json"
 )
 
 type Not2xxError interface {
@@ -103,10 +100,10 @@ func WithDebug(f func() DebugInterface) ClientOption {
 
 // Client is an HTTP client.
 type Client struct {
-	opts        clientOptions
-	hc          *http.Client
-	target      *url.URL
-	contentType string
+	opts           clientOptions
+	hc             *http.Client
+	target         *url.URL
+	contentSubType string
 }
 
 func NewClient(opts ...ClientOption) *Client {
@@ -139,7 +136,7 @@ func NewClient(opts ...ClientOption) *Client {
 		hc: &http.Client{
 			Transport: options.transport,
 		},
-		contentType: ContentSubtype(options.contentType),
+		contentSubType: ContentSubtype(options.contentType),
 	}
 
 	c.SetEndpoint(options.endpoint)
@@ -197,10 +194,9 @@ func (c *Client) BindResponseBody(response *http.Response, reply any) error {
 	if reply == nil {
 		return nil
 	}
-
-	codec := CodecForResponse(response, c.contentType)
+	codec, _ := CodecForResponse(response)
 	if codec == nil {
-		return fmt.Errorf("response: unsupported content type: %s", c.opts.contentType)
+		return fmt.Errorf("response: unsupported content type: %s", response.Header.Get("Content-Type"))
 	}
 
 	defer response.Body.Close()
@@ -247,7 +243,7 @@ func (c *Client) Invoke(ctx context.Context, method, path string, args any, repl
 
 	// marshal request body
 	if args != nil {
-		codec := encoding.GetCodec(c.contentType)
+		codec := defaultContentType.Get(c.contentSubType)
 		if codec == nil {
 			return nil, fmt.Errorf("request: unsupported content type: %s", c.opts.contentType)
 		}

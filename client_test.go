@@ -30,8 +30,8 @@ func TestWithDebug(t *testing.T) {
 	var reply any
 	_, err := client.Invoke(context.Background(), http.MethodPost, "/oauth/token", data, &reply, &CallOptions{
 		Query: map[string]any{
-			"page":       "1",
-			"membership": true,
+			"page": "1",
+			//"membership": true,
 		},
 	})
 
@@ -39,5 +39,5 @@ func TestWithDebug(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("Invoke /api/v4/projects success, reply: %+v\n", reply)
+	fmt.Printf("Invoke /oauth/token success, reply: %+v\n", reply)
 }
