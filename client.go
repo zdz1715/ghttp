@@ -10,14 +10,8 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"strconv"
-	"strings"
 	"time"
 )
-
-type Not2xxError interface {
-	String() string
-}
 
 // ClientOption is HTTP client option.
 type ClientOption func(*clientOptions)
@@ -172,22 +166,11 @@ func (c *Client) bindNot2xxError(response *http.Response) error {
 		return err
 	}
 
-	var buf strings.Builder
-
-	if response.Request != nil {
-		buf.WriteString(response.Request.Method)
-		buf.WriteByte(' ')
+	return &HTTPNot2xxError{
+		Method:     response.Request.Method,
+		StatusCode: response.StatusCode,
+		Err:        not2xxError,
 	}
-
-	buf.WriteString(strconv.Itoa(response.StatusCode))
-	e := not2xxError.String()
-
-	if e != "" {
-		buf.WriteString(": ")
-		buf.WriteString(e)
-	}
-
-	return errors.New(buf.String())
 }
 
 func (c *Client) BindResponseBody(response *http.Response, reply any) error {
