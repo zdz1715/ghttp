@@ -167,6 +167,7 @@ func (c *Client) bindNot2xxError(response *http.Response) error {
 	}
 
 	return &HTTPNot2xxError{
+		URL:        response.Request.URL,
 		Method:     response.Request.Method,
 		StatusCode: response.StatusCode,
 		Err:        not2xxError,

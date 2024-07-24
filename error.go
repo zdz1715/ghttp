@@ -2,6 +2,7 @@ package ghttp
 
 import (
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -11,6 +12,7 @@ type Not2xxError interface {
 }
 
 type HTTPNot2xxError struct {
+	URL        *url.URL
 	Method     string
 	StatusCode int
 	Err        Not2xxError
@@ -21,6 +23,13 @@ func (h HTTPNot2xxError) Error() string {
 
 	if h.Method != "" {
 		buf.WriteString(h.Method)
+		buf.WriteByte(' ')
+	}
+
+	if h.URL != nil {
+		buf.WriteString(`"`)
+		buf.WriteString(h.URL.String())
+		buf.WriteString(`"`)
 		buf.WriteByte(' ')
 	}
 
