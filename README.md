@@ -249,11 +249,4 @@ TotalDuration                 412.40375ms
 }
 
 ```
-## examples
-- [gitlab-demo](./examples/gitlab-demo/main.go): 快速创建一个gitlab sdk demo
-- [go-gitlab](https://github.com/zdz1715/go-gitlab): gitlab sdk
-- [go-jira](https://github.com/zdz1715/go-jira): jira sdk
-- [go-gitee](https://github.com/zdz1715/go-gitee): gitee sdk
-- [go-dingtalk](https://github.com/zdz1715/go-dingtalk): dingtalk sdk
-
 
