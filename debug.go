@@ -263,13 +263,15 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 				write(d.Writer, "")
 			}
 		}
+	} else {
+		write(d.Writer, "")
 	}
 
-	write(d.Writer, "> %s %s", response.Proto, response.Status)
+	write(d.Writer, "< %s %s", response.Proto, response.Status)
 	for k, v := range response.Header {
-		write(d.Writer, "> %s: %s", k, strings.Join(v, ","))
+		write(d.Writer, "< %s: %s", k, strings.Join(v, ","))
 	}
-
+	write(d.Writer, "<")
 	// response body
 	if response.Body != nil {
 		//resBodyReader := io.Reader(response.Body)
@@ -280,6 +282,10 @@ func (d *Debug) After(request *http.Request, response *http.Response) {
 			if len(resBodyBs) > 0 {
 				write(d.Writer, "")
 				write(d.Writer, "%s", string(resBodyBs))
+				write(d.Writer, "")
+			} else {
+				write(d.Writer, "")
+				write(d.Writer, "%s", string(responseBody))
 				write(d.Writer, "")
 			}
 		}
